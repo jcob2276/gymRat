@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { syncOuraData } from '../lib/oura';
-import { Battery, Moon, Footprints, Star, RefreshCw, Key } from 'lucide-react';
+import { Battery, Moon, Footprints, Star, RefreshCw, Key, Plus } from 'lucide-react';
 
 export default function OuraWidget({ session }) {
   const [loading, setLoading] = useState(true);
@@ -17,27 +17,40 @@ export default function OuraWidget({ session }) {
 
   async function fetchData() {
     setLoading(true);
-    
-    // 1. Fetch settings
-    const { data: userSettings } = await supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .single();
-    
-    setSettings(userSettings);
+    try {
+      // 1. Fetch settings
+      const { data: userSettings, error: settingsError } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+      
+      if (!settingsError) {
+        setSettings(userSettings);
+      } else {
+        console.warn('Settings not found or error:', settingsError);
+        setSettings(null);
+      }
 
-    // 2. Fetch today's summary
-    const today = new Date().toISOString().split('T')[0];
-    const { data: summary } = await supabase
-      .from('oura_daily_summary')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('date', today)
-      .single();
-    
-    setData(summary);
-    setLoading(false);
+      // 2. Fetch today's summary
+      const today = new Date().toISOString().split('T')[0];
+      const { data: summary, error: summaryError } = await supabase
+        .from('oura_daily_summary')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('date', today)
+        .single();
+      
+      if (!summaryError) {
+        setData(summary);
+      } else {
+        setData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching Oura data:', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSync() {

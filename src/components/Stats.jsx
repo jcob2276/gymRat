@@ -56,7 +56,7 @@ export default function Stats({ session }) {
           weight: l.weight,
           target: calculateTarget(parseISO(l.created_at))
         }));
-      setBenchData(bench);
+      setBenchData(bench || []);
 
       const pullups = logs
         .filter(l => l.exercise_name.includes('Pull-upy'))
@@ -65,7 +65,7 @@ export default function Stats({ session }) {
           if (!acc[date]) acc[date] = curr.reps;
           return acc;
         }, {});
-      setPullupData(Object.entries(pullups).map(([date, reps]) => ({ date, reps })));
+      setPullupData(Object.entries(pullups).map(([date, reps]) => ({ date, reps })) || []);
     }
 
     if (body) {
@@ -73,12 +73,13 @@ export default function Stats({ session }) {
         date: format(parseISO(b.date), 'dd.MM'),
         weight: b.weight,
         waist: b.waist
-      })));
+      })) || []);
     }
 
     if (sessions) {
-      setRecentSessions(sessions);
-      setDurationData([...sessions].reverse().filter(s => s.duration_minutes > 0).map(s => ({
+      setRecentSessions(sessions || []);
+      const sessionList = sessions || [];
+      setDurationData([...sessionList].reverse().filter(s => s.duration_minutes > 0).map(s => ({
         date: format(parseISO(s.created_at), 'dd.MM'),
         duration: s.duration_minutes
       })));
@@ -256,6 +257,7 @@ export default function Stats({ session }) {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-black text-white uppercase italic">Dzień {s.workout_day}</span>
                   <span className="text-[10px] text-neutral-500 font-bold uppercase">{format(parseISO(s.created_at), 'eeee, d MMM', { locale: pl })}</span>
+
                 </div>
                 <div className="flex gap-3 text-[10px] text-neutral-500 font-bold uppercase">
                   <span className="flex items-center gap-1"><Clock size={10} /> {s.duration_minutes || '?'} min</span>

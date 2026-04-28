@@ -7,6 +7,8 @@ import Stats from './Stats';
 import Photos from './Photos';
 import OuraWidget from './OuraWidget';
 
+
+
 export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('workout'); // 'workout' | 'stats' | 'photos'
