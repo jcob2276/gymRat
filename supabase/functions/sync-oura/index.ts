@@ -66,11 +66,14 @@ serve(async (req) => {
     const upsertData = Object.values(summaries).map(s => {
       let isDisciplined = false
       if (s.bedtime_timestamp) {
-        const bedtime = new Date(s.bedtime_timestamp)
-        const hours = bedtime.getHours()
-        const minutes = bedtime.getMinutes()
-        if (hours >= 18 && (hours < 23 || (hours === 23 && minutes < 30))) {
-          isDisciplined = true
+        // Extract local time from ISO string (e.g., "2024-04-28T00:50:00+02:00")
+        // This ensures we check the hour in the user's local timezone
+        const timePart = s.bedtime_timestamp.split('T')[1]
+        if (timePart) {
+          const [h, m] = timePart.split(':').map(Number)
+          if (h >= 18 && (h < 23 || (h === 23 && m < 30))) {
+            isDisciplined = true
+          }
         }
       }
       return {
