@@ -52,3 +52,20 @@ CREATE POLICY "Users can manage their own exercise logs" ON public.exercise_logs
 
 CREATE POLICY "Users can manage their own habits" ON public.daily_habits
     FOR ALL USING (auth.uid() = user_id);
+-- 4. TABELA POMIARÓW CIAŁA (Statystyki)
+CREATE TABLE public.body_metrics (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    date DATE DEFAULT CURRENT_DATE,
+    weight DECIMAL(5,2),
+    waist DECIMAL(5,2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+    UNIQUE(user_id, date)
+);
+
+-- WŁĄCZENIE RLS DLA NOWEJ TABELI
+ALTER TABLE public.body_metrics ENABLE ROW LEVEL SECURITY;
+
+-- POLITYKI DLA NOWEJ TABELI
+CREATE POLICY "Users can manage their own body metrics" ON public.body_metrics
+    FOR ALL USING (auth.uid() = user_id);
