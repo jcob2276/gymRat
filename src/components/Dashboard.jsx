@@ -5,6 +5,7 @@ import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
 import Photos from './Photos';
+import OuraWidget from './OuraWidget';
 
 export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,9 @@ export default function Dashboard({ session }) {
       <main className="flex-1 overflow-y-auto pb-24">
         {view === 'workout' && (
           <div className="p-6 space-y-10">
+            {/* Oura Insights Widget */}
+            <OuraWidget session={session} />
+
             {/* Korekta Postawy Widget */}
             <section>
               <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase mb-4">🧘 Korekta Postawy</h2>

@@ -86,3 +86,38 @@ ALTER TABLE public.progress_photos ENABLE ROW LEVEL SECURITY;
 -- POLITYKI DLA NOWEJ TABELI
 CREATE POLICY "Users can manage their own photos" ON public.progress_photos
     FOR ALL USING (auth.uid() = user_id);
+
+-- 6. TABELA PODSUMOWAŃ OURA
+CREATE TABLE public.oura_daily_summary (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    readiness_score INTEGER,
+    total_sleep_hours DECIMAL(4,2),
+    steps INTEGER,
+    bedtime_timestamp TIMESTAMP WITH TIME ZONE,
+    is_disciplined BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+    UNIQUE(user_id, date)
+);
+
+-- 7. TABELA USTAWIEŃ UŻYTKOWNIKA (Tokeny itp.)
+CREATE TABLE public.user_settings (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    oura_token TEXT,
+    disciplined_streak INTEGER DEFAULT 0,
+    total_disciplined_days INTEGER DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- WŁĄCZENIE RLS
+ALTER TABLE public.oura_daily_summary ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+
+-- POLITYKI
+CREATE POLICY "Users can manage their own Oura data" ON public.oura_daily_summary
+    FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can manage their own settings" ON public.user_settings
+    FOR ALL USING (auth.uid() = user_id);
+
