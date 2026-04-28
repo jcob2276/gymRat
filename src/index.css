@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0a;
+  --color-surface: #171717;
+  --color-primary: #3b82f6;
+  --color-dayA: #3b82f6;
+  --color-dayB: #ef4444;
+  --color-dayC: #22c55e;
+  --color-dayD: #f59e0b;
+}
+
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: white;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid #262626; /* neutral-800 */
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+    font-weight: 900;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .btn-primary:hover {
+    background-color: #2563eb; /* blue-600 */
+  }
+
+  .btn-outline {
+    background-color: transparent;
+    border: 1px solid #262626;
+    color: #a3a3a3; /* neutral-400 */
+    font-weight: 900;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .btn-outline:hover {
+    background-color: #171717;
+    color: white;
+  }
+
+  .input {
+    background-color: #171717;
+    border: 1px solid #262626;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: white;
+    width: 100%;
+    transition: all 0.2s;
+  }
+  
+  .input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #737373; /* neutral-500 */
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.375rem;
+    display: block;
+  }
+}
+
+
+/* Custom Day Colors for dynamic classes */
+.border-l-dayA { border-left-color: #3b82f6; }
+.border-l-dayB { border-left-color: #ef4444; }
+.border-l-dayC { border-left-color: #22c55e; }
+.border-l-dayD { border-left-color: #f59e0b; }
+
+.bg-dayA { background-color: #3b82f6; }
+.bg-dayB { background-color: #ef4444; }
+.bg-dayC { background-color: #22c55e; }
+.bg-dayD { background-color: #f59e0b; }

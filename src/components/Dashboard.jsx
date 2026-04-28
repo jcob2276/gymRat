@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, CheckCircle2, Circle, TrendingUp } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Play } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 
