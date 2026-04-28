@@ -151,8 +151,9 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
     <div className="min-h-screen bg-background text-white flex flex-col relative">
       {/* Top Header */}
       <div className="p-4 border-b border-neutral-800 flex justify-between items-center bg-background/80 backdrop-blur-md sticky top-0 z-10">
-        <button onClick={() => setCurrentStep(prev => prev - 1)} className="p-2 text-neutral-500">
-          <ArrowLeft size={20} />
+        <button onClick={() => setCurrentStep(prev => prev - 1)} className="flex items-center gap-1 p-2 text-neutral-500 hover:text-white transition-colors">
+          <ArrowLeft size={18} />
+          <span className="text-[10px] font-black uppercase tracking-tighter">Poprzednie</span>
         </button>
         <div className="flex flex-col items-center">
           <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
@@ -164,7 +165,7 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
             </span>
           )}
         </div>
-        <div className="w-10"></div>
+        <div className="w-16"></div> {/* Spacer to balance the header */}
       </div>
 
       {/* Exercise Info */}

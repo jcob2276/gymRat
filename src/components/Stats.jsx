@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
 } from 'recharts';
-import { TrendingUp, Scale, Ruler, Trophy, Calendar, Clock } from 'lucide-react';
+import { TrendingUp, Scale, Ruler, Trophy, Calendar, Clock, Trash2, History } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
+import { pl } from 'date-fns/locale';
 
 const START_DATE = new Date('2026-04-26');
 const END_DATE = new Date('2026-08-01');
@@ -16,6 +17,7 @@ export default function Stats({ session }) {
   const [bodyData, setBodyData] = useState([]);
   const [pullupData, setPullupData] = useState([]);
   const [durationData, setDurationData] = useState([]);
+  const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
 
   useEffect(() => {
@@ -42,9 +44,9 @@ export default function Stats({ session }) {
     // Fetch Session Durations
     const { data: sessions } = await supabase
       .from('workout_sessions')
-      .select('duration_minutes, created_at')
+      .select('*')
       .eq('user_id', session.user.id)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (logs) {
       const bench = logs
@@ -75,13 +77,26 @@ export default function Stats({ session }) {
     }
 
     if (sessions) {
-      setDurationData(sessions.filter(s => s.duration_minutes > 0).map(s => ({
+      setRecentSessions(sessions);
+      setDurationData([...sessions].reverse().filter(s => s.duration_minutes > 0).map(s => ({
         date: format(parseISO(s.created_at), 'dd.MM'),
         duration: s.duration_minutes
       })));
     }
 
     setLoading(false);
+  }
+
+  async function deleteSession(id) {
+    if (!confirm('Czy na pewno chcesz usunąć ten trening? Wszystkie serie zostaną usunięte.')) return;
+    
+    const { error } = await supabase
+      .from('workout_sessions')
+      .delete()
+      .eq('id', id);
+
+    if (error) alert(error.message);
+    else fetchStats();
   }
 
   function calculateTarget(date) {
@@ -199,36 +214,6 @@ export default function Stats({ session }) {
         </div>
       </section>
 
-      {/* Body Metric Input Form */}
-      <section className="card space-y-4 bg-gradient-to-br from-neutral-900 to-neutral-950">
-        <h3 className="text-xs font-black uppercase text-white">Dodaj pomiary tygodniowe</h3>
-        <form onSubmit={saveMetrics} className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Waga (kg)</label>
-            <input 
-              type="number" 
-              step="0.1"
-              value={newMetric.weight}
-              onChange={e => setNewMetric({...newMetric, weight: e.target.value})}
-              className="input text-center" 
-              placeholder="0.0"
-            />
-          </div>
-          <div>
-            <label className="label">Talia (cm)</label>
-            <input 
-              type="number" 
-              step="0.1"
-              value={newMetric.waist}
-              onChange={e => setNewMetric({...newMetric, waist: e.target.value})}
-              className="input text-center" 
-              placeholder="0.0"
-            />
-          </div>
-          <button type="submit" className="btn-primary col-span-2 py-2 text-xs">Zapisz pomiar</button>
-        </form>
-      </section>
-
       {/* Trends Table */}
       <section className="space-y-4">
         <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase">📊 Kluczowe Trendy</h2>
@@ -259,6 +244,67 @@ export default function Stats({ session }) {
         </div>
       </section>
 
+      {/* Recent Sessions (History) */}
+      <section className="space-y-4">
+        <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase flex items-center gap-2">
+          <History size={14} className="text-neutral-500" /> Historia Treningów
+        </h2>
+        <div className="space-y-2">
+          {recentSessions.map((s) => (
+            <div key={s.id} className="card p-4 flex justify-between items-center group">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-black text-white uppercase italic">Dzień {s.workout_day}</span>
+                  <span className="text-[10px] text-neutral-500 font-bold uppercase">{format(parseISO(s.created_at), 'eeee, d MMM', { locale: pl })}</span>
+                </div>
+                <div className="flex gap-3 text-[10px] text-neutral-500 font-bold uppercase">
+                  <span className="flex items-center gap-1"><Clock size={10} /> {s.duration_minutes || '?'} min</span>
+                  {s.session_notes && <span className="text-primary tracking-tighter">● Ma notatki</span>}
+                </div>
+              </div>
+              <button 
+                onClick={() => deleteSession(s.id)}
+                className="p-2 text-neutral-800 hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          ))}
+          {recentSessions.length === 0 && <p className="text-center py-10 text-xs text-neutral-600 uppercase font-black">Brak historii treningów</p>}
+        </div>
+      </section>
+
+      {/* Body Metric Input Form */}
+      <section className="card space-y-4 bg-gradient-to-br from-neutral-900 to-neutral-950">
+        <h3 className="text-xs font-black uppercase text-white">Dodaj pomiary tygodniowe</h3>
+        <form onSubmit={saveMetrics} className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Waga (kg)</label>
+            <input 
+              type="number" 
+              step="0.1"
+              value={newMetric.weight}
+              onChange={e => setNewMetric({...newMetric, weight: e.target.value})}
+              className="input text-center" 
+              placeholder="0.0"
+            />
+          </div>
+          <div>
+            <label className="label">Talia (cm)</label>
+            <input 
+              type="number" 
+              step="0.1"
+              value={newMetric.waist}
+              onChange={e => setNewMetric({...newMetric, waist: e.target.value})}
+              className="input text-center" 
+              placeholder="0.0"
+            />
+          </div>
+          <button type="submit" className="btn-primary col-span-2 py-2 text-xs">Zapisz pomiar</button>
+        </form>
+      </section>
+
     </div>
   );
 }
+
