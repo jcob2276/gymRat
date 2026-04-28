@@ -7,6 +7,8 @@ CREATE TABLE public.workout_sessions (
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     workout_day VARCHAR(10) NOT NULL, -- 'A', 'B', 'C', 'D'
     date DATE DEFAULT CURRENT_DATE,
+    duration_minutes INTEGER,
+    session_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 

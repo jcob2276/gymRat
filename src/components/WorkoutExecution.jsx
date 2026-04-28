@@ -1,17 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, CheckCircle2, ChevronRight, Play } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight, Play, Timer, Save } from 'lucide-react';
 import { WORKOUT_PLAN } from '../data/workoutPlan';
 
 export default function WorkoutExecution({ dayKey, session, onBack }) {
   const plan = WORKOUT_PLAN[dayKey];
   const [currentStep, setCurrentStep] = useState(0); // 0: intro, 1+: exercises
   const [logs, setLogs] = useState({}); // { exerciseId: [{ weight, reps, isDone }] }
+  const [startTime, setStartTime] = useState(null);
+  const [sessionNotes, setSessionNotes] = useState('');
   const [isFinishing, setIsFinishing] = useState(false);
 
   const currentExercise = plan.exercises[currentStep - 1];
 
+  // Load draft on mount
+  useEffect(() => {
+    const draft = localStorage.getItem(`workout_draft_${dayKey}`);
+    if (draft) {
+      const { logs: savedLogs, currentStep: savedStep, startTime: savedStart, notes: savedNotes } = JSON.parse(draft);
+      if (confirm('Masz niezapisany postęp z tego treningu. Czy chcesz go przywrócić?')) {
+        setLogs(savedLogs);
+        setCurrentStep(savedStep);
+        setStartTime(savedStart ? new Date(savedStart) : null);
+        setSessionNotes(savedNotes || '');
+      } else {
+        localStorage.removeItem(`workout_draft_${dayKey}`);
+      }
+    }
+  }, [dayKey]);
+
+  // Save draft on every change
+  useEffect(() => {
+    if (currentStep > 0) {
+      localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify({
+        logs,
+        currentStep,
+        startTime,
+        notes: sessionNotes
+      }));
+    }
+  }, [logs, currentStep, startTime, sessionNotes, dayKey]);
+
   const handleStart = () => {
+    setStartTime(new Date());
     setCurrentStep(1);
   };
 
@@ -36,10 +67,18 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
   const finishWorkout = async () => {
     setIsFinishing(true);
     try {
+      const endTime = new Date();
+      const duration = startTime ? Math.floor((endTime - startTime) / 60000) : 0;
+
       // 1. Create session
       const { data: sessionData, error: sError } = await supabase
         .from('workout_sessions')
-        .insert([{ user_id: session.user.id, workout_day: dayKey }])
+        .insert([{ 
+          user_id: session.user.id, 
+          workout_day: dayKey,
+          duration_minutes: duration,
+          session_notes: sessionNotes
+        }])
         .select()
         .single();
 
@@ -58,7 +97,7 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
               set_number: idx + 1,
               reps: Number(s.reps),
               weight: Number(s.weight),
-              is_pws_or_msp: false // logic to determine this later
+              is_pws_or_msp: false 
             });
           }
         });
@@ -69,7 +108,8 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
         if (lError) throw lError;
       }
 
-      alert('Trening zapisany pomyślnie!');
+      localStorage.removeItem(`workout_draft_${dayKey}`);
+      alert(`Trening zapisany! Czas: ${duration} min.`);
       onBack();
     } catch (err) {
       console.error(err);
@@ -114,68 +154,87 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
         <button onClick={() => setCurrentStep(prev => prev - 1)} className="p-2 text-neutral-500">
           <ArrowLeft size={20} />
         </button>
-        <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-          Ćwiczenie {currentStep} z {plan.exercises.length}
-        </span>
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+            Ćwiczenie {currentStep} z {plan.exercises.length}
+          </span>
+          {startTime && (
+            <span className="text-[8px] text-primary font-black uppercase flex items-center gap-1">
+              <Timer size={10} /> Aktywny trening
+            </span>
+          )}
+        </div>
         <div className="w-10"></div>
       </div>
 
       {/* Exercise Info */}
-      <main className="flex-1 p-6">
-        <h2 className="text-2xl font-black uppercase mb-1">{currentExercise.name}</h2>
-        <div className="flex gap-4 mb-8">
-          <div className="bg-neutral-900 px-3 py-1 rounded-md text-[10px] font-bold text-neutral-400 uppercase border border-neutral-800">
-            Tempo: {currentExercise.tempo}
-          </div>
-          {currentExercise.msp && (
-            <div className="bg-dayB/10 px-3 py-1 rounded-md text-[10px] font-bold text-dayB uppercase border border-dayB/30">
-              MSP: {currentExercise.msp}
+      <main className="flex-1 p-6 space-y-8">
+        <section>
+          <h2 className="text-2xl font-black uppercase mb-1">{currentExercise.name}</h2>
+          <div className="flex gap-4 mb-4">
+            <div className="bg-neutral-900 px-3 py-1 rounded-md text-[10px] font-bold text-neutral-400 uppercase border border-neutral-800">
+              Tempo: {currentExercise.tempo}
             </div>
-          )}
-        </div>
+            {currentExercise.msp && (
+              <div className="bg-dayB/10 px-3 py-1 rounded-md text-[10px] font-bold text-dayB uppercase border border-dayB/30">
+                MSP: {currentExercise.msp}
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Set Tracker */}
         <div className="space-y-3">
           {Array(currentExercise.sets).fill(0).map((_, idx) => {
             const setLog = logs[currentExercise.id]?.[idx] || { weight: '', reps: '', isDone: false };
             return (
-              <div key={idx} className={`card p-4 flex items-center gap-4 transition-all ${setLog.isDone ? 'opacity-40 border-neutral-900' : 'border-neutral-800'}`}>
+              <div key={idx} className={`card p-4 flex items-center gap-4 transition-all ${setLog.isDone ? 'opacity-40 border-neutral-900 bg-neutral-900/20' : 'border-neutral-800'}`}>
                 <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-xs font-bold text-neutral-500">
                   {idx + 1}
                 </div>
                 <div className="flex-1 grid grid-cols-2 gap-4">
-                  <div>
-                    <input 
-                      type="number" 
-                      placeholder="kg"
-                      value={setLog.weight}
-                      onChange={(e) => updateSet(currentExercise.id, idx, 'weight', e.target.value)}
-                      className="bg-transparent border-b border-neutral-800 w-full focus:border-primary outline-none text-center"
-                    />
-                  </div>
-                  <div>
-                    <input 
-                      type="number" 
-                      placeholder="reps"
-                      value={setLog.reps}
-                      onChange={(e) => updateSet(currentExercise.id, idx, 'reps', e.target.value)}
-                      className="bg-transparent border-b border-neutral-800 w-full focus:border-primary outline-none text-center"
-                    />
-                  </div>
+                  <input 
+                    type="number" 
+                    placeholder="kg"
+                    value={setLog.weight}
+                    onChange={(e) => updateSet(currentExercise.id, idx, 'weight', e.target.value)}
+                    className="bg-transparent border-b border-neutral-800 w-full focus:border-primary outline-none text-center text-lg font-black"
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="reps"
+                    value={setLog.reps}
+                    onChange={(e) => updateSet(currentExercise.id, idx, 'reps', e.target.value)}
+                    className="bg-transparent border-b border-neutral-800 w-full focus:border-primary outline-none text-center text-lg font-black"
+                  />
                 </div>
                 <button 
                   onClick={() => toggleSetDone(currentExercise.id, idx)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${setLog.isDone ? 'bg-primary text-white' : 'bg-neutral-900 text-neutral-700'}`}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${setLog.isDone ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-neutral-900 text-neutral-700'}`}
                 >
-                  <CheckCircle2 size={24} />
+                  <CheckCircle2 size={28} />
                 </button>
               </div>
             );
           })}
         </div>
+
+        {isLastExercise && (
+          <section className="space-y-3 pt-8">
+            <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Notatki z sesji</h3>
+            <textarea 
+              value={sessionNotes}
+              onChange={(e) => setSessionNotes(e.target.value)}
+              placeholder="Jak się czułeś? Coś do poprawy?"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-sm focus:outline-none focus:border-primary min-h-[100px]"
+            />
+          </section>
+        )}
         
         {currentExercise.notes && (
-          <p className="mt-6 text-sm text-neutral-500 italic">Uwagi: {currentExercise.notes}</p>
+          <p className="text-xs text-neutral-500 italic bg-neutral-900/30 p-3 rounded-lg border border-neutral-800/50">
+            💡 Podpowiedź: {currentExercise.notes}
+          </p>
         )}
       </main>
 
@@ -185,9 +244,9 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
           <button 
             disabled={isFinishing}
             onClick={finishWorkout} 
-            className="btn-primary w-full py-4 uppercase font-black tracking-widest"
+            className="btn-primary w-full py-4 uppercase font-black tracking-widest flex items-center justify-center gap-2"
           >
-            {isFinishing ? 'Zapisywanie...' : 'Zakończ trening'}
+            {isFinishing ? 'Zapisywanie...' : <><Save size={20} /> Zakończ i zapisz</>}
           </button>
         ) : (
           <button 
@@ -201,3 +260,4 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
     </div>
   );
 }
+

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
 } from 'recharts';
-import { TrendingUp, Scale, Ruler, Trophy, Calendar } from 'lucide-react';
-import { format, differenceInDays, parseISO, isAfter, isBefore } from 'date-fns';
+import { TrendingUp, Scale, Ruler, Trophy, Calendar, Clock } from 'lucide-react';
+import { format, differenceInDays, parseISO } from 'date-fns';
 
 const START_DATE = new Date('2026-04-26');
 const END_DATE = new Date('2026-08-01');
@@ -15,6 +15,7 @@ export default function Stats({ session }) {
   const [benchData, setBenchData] = useState([]);
   const [bodyData, setBodyData] = useState([]);
   const [pullupData, setPullupData] = useState([]);
+  const [durationData, setDurationData] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
 
   useEffect(() => {
@@ -38,8 +39,14 @@ export default function Stats({ session }) {
       .eq('user_id', session.user.id)
       .order('date', { ascending: true });
 
+    // Fetch Session Durations
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select('duration_minutes, created_at')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: true });
+
     if (logs) {
-      // Process Bench Data (Day A heavy)
       const bench = logs
         .filter(l => l.exercise_name === 'Wyciskanie płaskie (ciężko)')
         .map(l => ({
@@ -49,7 +56,6 @@ export default function Stats({ session }) {
         }));
       setBenchData(bench);
 
-      // Process Pullups (Max reps from first set)
       const pullups = logs
         .filter(l => l.exercise_name.includes('Pull-upy'))
         .reduce((acc, curr) => {
@@ -57,7 +63,6 @@ export default function Stats({ session }) {
           if (!acc[date]) acc[date] = curr.reps;
           return acc;
         }, {});
-      
       setPullupData(Object.entries(pullups).map(([date, reps]) => ({ date, reps })));
     }
 
@@ -69,13 +74,20 @@ export default function Stats({ session }) {
       })));
     }
 
+    if (sessions) {
+      setDurationData(sessions.filter(s => s.duration_minutes > 0).map(s => ({
+        date: format(parseISO(s.created_at), 'dd.MM'),
+        duration: s.duration_minutes
+      })));
+    }
+
     setLoading(false);
   }
 
   function calculateTarget(date) {
     const daysPassed = differenceInDays(date, START_DATE);
     const weeksPassed = Math.floor(daysPassed / 7);
-    return 80 + (weeksPassed * 1.66); // Simple linear to 100 in 12 weeks
+    return 80 + (weeksPassed * 1.66); 
   }
 
   async function saveMetrics(e) {
@@ -101,6 +113,9 @@ export default function Stats({ session }) {
   const daysPassed = differenceInDays(new Date(), START_DATE);
   const progressPercent = Math.min(100, Math.max(0, (daysPassed / TOTAL_DAYS) * 100));
   const daysLeft = differenceInDays(END_DATE, new Date());
+  const avgDuration = durationData.length > 0 
+    ? Math.round(durationData.reduce((acc, curr) => acc + curr.duration, 0) / durationData.length)
+    : 0;
 
   if (loading) return <div className="p-8 text-center text-neutral-500 uppercase font-black animate-pulse">Ładowanie statystyk...</div>;
 
@@ -115,7 +130,7 @@ export default function Stats({ session }) {
         </div>
         <div className="h-4 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 p-0.5">
           <div 
-            className="h-full bg-primary rounded-full transition-all duration-1000" 
+            className="h-full bg-primary rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -146,6 +161,24 @@ export default function Stats({ session }) {
         </div>
       </section>
 
+      {/* Duration Chart */}
+      <section className="space-y-4">
+        <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase flex items-center gap-2">
+          <Clock size={14} className="text-dayD" /> Czas Treningu (min)
+        </h2>
+        <div className="h-40 card p-2 bg-neutral-950/50">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={durationData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+              <XAxis dataKey="date" stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ backgroundColor: '#171717', border: '1px solid #262626' }} />
+              <Bar dataKey="duration" fill="#facc15" radius={[4, 4, 0, 0]} name="Minuty" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
       {/* Weight & Waist Chart */}
       <section className="space-y-4">
         <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase flex items-center gap-2">
@@ -167,7 +200,7 @@ export default function Stats({ session }) {
       </section>
 
       {/* Body Metric Input Form */}
-      <section className="card space-y-4">
+      <section className="card space-y-4 bg-gradient-to-br from-neutral-900 to-neutral-950">
         <h3 className="text-xs font-black uppercase text-white">Dodaj pomiary tygodniowe</h3>
         <form onSubmit={saveMetrics} className="grid grid-cols-2 gap-3">
           <div>
@@ -211,8 +244,8 @@ export default function Stats({ session }) {
             <tbody className="divide-y divide-neutral-900">
               {[
                 { label: 'Bench (kg)', val: benchData[benchData.length-1]?.weight || '-', trend: '+2,5 ▲', color: 'text-primary' },
+                { label: 'Śr. czas (min)', val: avgDuration || '-', trend: '~stały', color: 'text-dayD' },
                 { label: 'Talia (cm)', val: bodyData[bodyData.length-1]?.waist || '-', trend: '-1,5 ▼', color: 'text-dayC' },
-                { label: 'Waga (kg)', val: bodyData[bodyData.length-1]?.weight || '-', trend: '-0,5 ▼', color: 'text-dayC' },
                 { label: 'Pull-upy (max)', val: pullupData[pullupData.length-1]?.reps || '-', trend: '+1 ▲', color: 'text-primary' },
               ].map((row, i) => (
                 <tr key={i}>
