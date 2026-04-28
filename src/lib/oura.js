@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { format, subDays, parseISO } from 'date-fns';
 
-const OURA_BASE_URL = 'https://api.ouraring.com/v2/usercollection';
+const OURA_BASE_URL = '/oura-api/v2/usercollection';
 
 export async function syncOuraData(userId, token) {
   const today = format(new Date(), 'yyyy-MM-dd');
