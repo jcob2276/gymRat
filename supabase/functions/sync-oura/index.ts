@@ -39,7 +39,7 @@ serve(async (req) => {
     // 2. Fetch Data
     const [readinessData, sleepData, activityData] = await Promise.all([
       fetch(`${OURA_BASE_URL}/daily_readiness?start_date=${startDate}&end_date=${today}`, { headers }).then(res => res.json()),
-      fetch(`${OURA_BASE_URL}/daily_sleep?start_date=${startDate}&end_date=${today}`, { headers }).then(res => res.json()),
+      fetch(`${OURA_BASE_URL}/sleep?start_date=${startDate}&end_date=${today}`, { headers }).then(res => res.json()),
       fetch(`${OURA_BASE_URL}/daily_activity?start_date=${startDate}&end_date=${today}`, { headers }).then(res => res.json())
     ])
 
