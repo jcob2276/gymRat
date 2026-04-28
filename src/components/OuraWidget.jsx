@@ -27,24 +27,25 @@ export default function OuraWidget({ session }) {
       
       if (!settingsError) {
         setSettings(userSettings);
-      } else {
-        console.warn('Settings not found or error:', settingsError);
-        setSettings(null);
       }
 
-      // 2. Fetch today's summary
-      const today = new Date().toISOString().split('T')[0];
-      const { data: summary, error: summaryError } = await supabase
+      // 2. Fetch 2 most recent summaries
+      const { data: summaries, error: summaryError } = await supabase
         .from('oura_daily_summary')
         .select('*')
         .eq('user_id', session.user.id)
-        .eq('date', today)
-        .single();
+        .order('date', { ascending: false })
+        .limit(2);
       
-      if (!summaryError) {
-        setData(summary);
-      } else {
-        setData(null);
+      if (!summaryError && summaries) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayRecord = summaries.find(s => s.date === todayStr);
+        const yesterdayRecord = summaries.find(s => s.date !== todayStr);
+        
+        setData({
+          today: todayRecord || null,
+          yesterday: yesterdayRecord || null
+        });
       }
     } catch (err) {
       console.error('Error fetching Oura data:', err);
@@ -118,17 +119,21 @@ export default function OuraWidget({ session }) {
     );
   }
 
-  const sleepHours = Math.floor(data?.total_sleep_hours || 0);
-  const sleepMinutes = Math.round(((data?.total_sleep_hours || 0) % 1) * 60);
+  const activeReadiness = data?.today?.readiness_score || data?.yesterday?.readiness_score;
+  const activeSleep = (data?.today?.total_sleep_hours > 0) ? data?.today : data?.yesterday;
+  const activeSteps = data?.yesterday; // Zawsze wczorajsze kroki jako pełny dzień
+
+  const sleepHours = Math.floor(activeSleep?.total_sleep_hours || 0);
+  const sleepMinutes = Math.round(((activeSleep?.total_sleep_hours || 0) % 1) * 60);
 
   return (
     <div className="space-y-4">
       
       {/* Readiness Widget */}
-      <section className="card bg-gradient-to-br from-neutral-900 to-neutral-950 overflow-hidden relative">
+      <section className="card bg-gradient-to-br from-neutral-900 to-neutral-950 overflow-hidden relative border-primary/20 shadow-lg shadow-primary/5">
         <div className="flex justify-between items-start mb-6">
           <div className="flex items-center gap-2">
-            <Battery size={18} className={data?.readiness_score < 70 ? 'text-red-500' : 'text-primary'} />
+            <Battery size={18} className={activeReadiness < 70 ? 'text-red-500' : 'text-primary'} />
             <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Gotowość Oura</h3>
           </div>
           <button onClick={handleSync} disabled={syncing} className={`text-neutral-500 hover:text-white ${syncing ? 'animate-spin' : ''}`}>
@@ -137,43 +142,51 @@ export default function OuraWidget({ session }) {
         </div>
 
         <div className="flex items-end gap-4 mb-4">
-          <span className="text-4xl font-black text-white italic">{data?.readiness_score || '--'}</span>
+          <span className="text-4xl font-black text-white italic">{activeReadiness || '--'}</span>
           <div className="pb-1">
-            {data?.readiness_score ? (
-              data.readiness_score < 70 
+            {activeReadiness ? (
+              activeReadiness < 70 
                 ? <p className="text-[10px] font-black text-red-500 uppercase tracking-tighter italic">⚠️ Niska. Sugeruję deload (70%)</p>
                 : <p className="text-[10px] font-black text-primary uppercase tracking-tighter italic">✅ Możesz trenować normalnie</p>
-            ) : <p className="text-[10px] text-neutral-600 uppercase">Brak danych na dziś</p>}
+            ) : <p className="text-[10px] text-neutral-600 uppercase">Brak danych</p>}
           </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-900">
-            <div className="flex items-center gap-2 mb-1">
-              <Moon size={12} className="text-dayB" />
-              <span className="text-[8px] font-bold text-neutral-600 uppercase">Sen</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1">
+                <Moon size={10} className="text-dayB" />
+                <span className="text-[7px] font-bold text-neutral-600 uppercase">Sen</span>
+              </div>
+              <span className="text-[6px] text-neutral-700 font-bold uppercase">{activeSleep?.date === data?.today?.date ? 'Dziś' : 'Wczoraj'}</span>
             </div>
             <p className="text-xs font-black text-white">{sleepHours}h {sleepMinutes}m</p>
-            {data?.total_sleep_hours < 7 && <p className="text-[7px] text-red-500 font-bold uppercase mt-1">Za krótko!</p>}
+            {activeSleep?.total_sleep_hours < 7 && <p className="text-[7px] text-red-500 font-bold uppercase mt-0.5">Za krótko!</p>}
           </div>
 
           <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-900">
-            <div className="flex items-center gap-2 mb-1">
-              <Footprints size={12} className="text-dayC" />
-              <span className="text-[8px] font-bold text-neutral-600 uppercase">Kroki</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1">
+                <Footprints size={10} className="text-dayC" />
+                <span className="text-[7px] font-bold text-neutral-600 uppercase">Kroki</span>
+              </div>
+              <span className="text-[6px] text-neutral-700 font-bold uppercase">Wczoraj</span>
             </div>
-            <p className="text-xs font-black text-white">{data?.steps?.toLocaleString() || '--'}</p>
-            {data?.steps < 10000 && <p className="text-[7px] text-orange-500 font-bold uppercase mt-1">Dołóż spacer</p>}
+            <p className="text-xs font-black text-white">{activeSteps?.steps?.toLocaleString() || '--'}</p>
+            {activeSteps?.steps < 10000 && <p className="text-[7px] text-orange-500 font-bold uppercase mt-0.5">Dołóż spacer</p>}
           </div>
 
           <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-900">
-            <div className="flex items-center gap-2 mb-1">
-              <Star size={12} className="text-dayD" />
-              <span className="text-[8px] font-bold text-neutral-600 uppercase">Streak</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1">
+                <Star size={10} className="text-dayD" />
+                <span className="text-[7px] font-bold text-neutral-600 uppercase">Streak</span>
+              </div>
             </div>
             <p className="text-xs font-black text-white">{settings?.disciplined_streak || 0} dni</p>
-            <p className="text-[7px] text-neutral-500 font-bold uppercase mt-1">Sen przed 23:30</p>
+            <p className="text-[6px] text-neutral-700 font-bold uppercase mt-0.5 truncate">Sen przed 23:30</p>
           </div>
         </div>
       </section>
