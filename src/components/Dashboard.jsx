@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, CheckCircle2, Circle, Play, Dumbbell, BarChart2 } from 'lucide-react';
+import { LogOut, CheckCircle2, Circle, Play, Dumbbell, BarChart2, Camera } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
+import Photos from './Photos';
 
 export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('workout'); // 'workout' | 'stats'
+  const [view, setView] = useState('workout'); // 'workout' | 'stats' | 'photos'
   const [selectedDay, setSelectedDay] = useState(null);
   const [habits, setHabits] = useState({
     couch_stretch: false,
@@ -83,7 +84,7 @@ export default function Dashboard({ session }) {
 
       {/* Main View Transition */}
       <main className="flex-1 overflow-y-auto pb-24">
-        {view === 'workout' ? (
+        {view === 'workout' && (
           <div className="p-6 space-y-10">
             {/* Korekta Postawy Widget */}
             <section>
@@ -145,9 +146,9 @@ export default function Dashboard({ session }) {
               <ProgressionTable />
             </section>
           </div>
-        ) : (
-          <Stats session={session} />
         )}
+        {view === 'stats' && <Stats session={session} />}
+        {view === 'photos' && <Photos session={session} />}
       </main>
 
       {/* Bottom Navigation */}
@@ -166,10 +167,18 @@ export default function Dashboard({ session }) {
           <BarChart2 size={24} />
           <span className="text-[8px] font-bold uppercase tracking-widest">Statystyki</span>
         </button>
+        <button 
+          onClick={() => setView('photos')}
+          className={`flex flex-col items-center gap-1 transition-colors ${view === 'photos' ? 'text-primary' : 'text-neutral-500'}`}
+        >
+          <Camera size={24} />
+          <span className="text-[8px] font-bold uppercase tracking-widest">Zdjęcia</span>
+        </button>
       </nav>
 
     </div>
   );
 }
+
 
 

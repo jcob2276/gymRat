@@ -69,3 +69,18 @@ ALTER TABLE public.body_metrics ENABLE ROW LEVEL SECURITY;
 -- POLITYKI DLA NOWEJ TABELI
 CREATE POLICY "Users can manage their own body metrics" ON public.body_metrics
     FOR ALL USING (auth.uid() = user_id);
+-- 5. TABELA ZDJĘĆ SYLWETKI (Transformacja)
+CREATE TABLE public.progress_photos (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    date DATE DEFAULT CURRENT_DATE,
+    image_url TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- WŁĄCZENIE RLS DLA NOWEJ TABELI
+ALTER TABLE public.progress_photos ENABLE ROW LEVEL SECURITY;
+
+-- POLITYKI DLA NOWEJ TABELI
+CREATE POLICY "Users can manage their own photos" ON public.progress_photos
+    FOR ALL USING (auth.uid() = user_id);
