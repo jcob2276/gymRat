@@ -23,6 +23,7 @@ export default function Stats({ session }) {
   const [ouraTrend, setOuraTrend] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ currentVolume: 0, prevVolume: 0, compliance: 0 });
   const [correlation, setCorrelation] = useState(null);
+  const [balanceData, setBalanceData] = useState([]);
   const [exportRange, setExportRange] = useState({ 
     start: format(addWeeks(new Date(), -4), 'yyyy-MM-dd'), 
     end: format(new Date(), 'yyyy-MM-dd') 
@@ -92,37 +93,53 @@ export default function Stats({ session }) {
         sleep: o.total_sleep_hours,
         rawDate: o.date
       })));
-
-      // Correlation Analysis
-      if (logs && oura.length > 0) {
-        const benchHeavy = logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie (Heavy)'));
-        const lowReadinessDays = oura.filter(o => o.readiness_score < 70);
-        
-        let badDaysPerf = 0;
-        let count = 0;
-
-        benchHeavy.forEach(l => {
-          const logDate = format(parseISO(l.created_at), 'yyyy-MM-dd');
-          const readinessOnDay = oura.find(o => o.date === logDate);
-          if (readinessOnDay && readinessOnDay.readiness_score < 70) {
-            badDaysPerf += l.weight;
-            count++;
-          }
-        });
-
-        if (count > 0) {
-          const avgBad = badDaysPerf / count;
-          const avgOverall = benchHeavy.reduce((acc, l) => acc + l.weight, 0) / benchHeavy.length;
-          const diff = avgOverall - avgBad;
-          setCorrelation({
-            avgBad: avgBad.toFixed(1),
-            avgOverall: avgOverall.toFixed(1),
-            diff: diff.toFixed(1),
-            count
-          });
-        }
-      }
     }
+
+    // --- 1RM BALANCE CALCULATION ---
+    if (logs && body) {
+      const benchLogs = logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie (Heavy)'));
+      const pullupLogs = logs.filter(l => l.exercise_name.includes('Pull-upy szerokie'));
+      
+      const weeklyBalance = {};
+      
+      // Helper to find bodyweight for a specific date
+      const getWeightForDate = (dateStr) => {
+        const logDate = new Date(dateStr);
+        const closest = body
+          .filter(b => new Date(b.date) <= logDate)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        return closest ? parseFloat(closest.weight) : 80; // Default to 80 if not found
+      };
+
+      const calculate1RM = (weight, reps) => weight * (1 + reps / 30);
+
+      // Process Bench
+      benchLogs.forEach(l => {
+        const weekNum = Math.floor(differenceInDays(parseISO(l.created_at), START_DATE) / 7) + 1;
+        const weekKey = `T${weekNum}`;
+        const rm = calculate1RM(l.weight, l.reps);
+        if (!weeklyBalance[weekKey]) weeklyBalance[weekKey] = { week: weekKey };
+        if (!weeklyBalance[weekKey].bench || rm > weeklyBalance[weekKey].bench) {
+          weeklyBalance[weekKey].bench = Math.round(rm);
+        }
+      });
+
+      // Process Pull-ups
+      pullupLogs.forEach(l => {
+        const weekNum = Math.floor(differenceInDays(parseISO(l.created_at), START_DATE) / 7) + 1;
+        const weekKey = `T${weekNum}`;
+        const bw = getWeightForDate(l.created_at);
+        const totalWeight = bw + (l.weight || 0);
+        const rm = calculate1RM(totalWeight, l.reps);
+        if (!weeklyBalance[weekKey]) weeklyBalance[weekKey] = { week: weekKey };
+        if (!weeklyBalance[weekKey].pullup || rm > weeklyBalance[weekKey].pullup) {
+          weeklyBalance[weekKey].pullup = Math.round(rm);
+        }
+      });
+
+      setBalanceData(Object.values(weeklyBalance).sort((a, b) => a.week.localeCompare(b.week)));
+    }
+    // ---------------------------------
 
     if (sessions) {
       const formattedSessions = sessions.map(s => {
@@ -246,7 +263,7 @@ export default function Stats({ session }) {
             <LineChart data={benchData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
               <XAxis dataKey="week" stroke="#525252" fontSize={10} fontWeight="bold" />
-              <YAxis domain={[70, 105]} stroke="#525252" fontSize={10} fontWeight="bold" />
+              <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke="#525252" fontSize={10} fontWeight="bold" />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }}
                 itemStyle={{ color: '#3b82f6', fontWeight: '900', fontSize: '12px' }}
@@ -268,6 +285,38 @@ export default function Stats({ session }) {
               />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Sekcja: Balance 1RM */}
+      <section className="space-y-6">
+        <header>
+          <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter flex items-center gap-2">
+             Balance: Bench vs Pull-up
+          </h2>
+          <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Szacowany 1RM (Epley)</p>
+        </header>
+
+        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64 min-h-[256px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={balanceData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+              <XAxis dataKey="week" stroke="#525252" fontSize={10} fontWeight="bold" />
+              <YAxis domain={['dataMin - 10', 'dataMax + 10']} stroke="#525252" fontSize={10} fontWeight="bold" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }}
+                itemStyle={{ fontSize: '12px', fontWeight: '900' }}
+              />
+              <Line type="monotone" dataKey="bench" name="Bench 1RM" stroke="#ffffff" strokeWidth={3} dot={{ r: 4, fill: '#ffffff' }} />
+              <Line type="monotone" dataKey="pullup" name="Pull-up 1RM" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl">
+           <p className="text-[10px] font-black text-white uppercase italic text-center">
+             Idealny stosunek: <span className="text-primary">1:1.2</span> na korzyść podciągania. 
+             Jeśli Bench > Pull-up, uważaj na postawę.
+           </p>
         </div>
       </section>
 
