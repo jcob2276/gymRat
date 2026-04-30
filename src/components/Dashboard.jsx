@@ -50,6 +50,14 @@ export default function Dashboard({ session }) {
   }
 
   const getDaySuggestion = (dayKey) => {
+    const lastA = lastDayASession;
+    if (dayKey === 'A' && lastA?.benchLogs) {
+      const avgMsp = lastA.benchLogs.reduce((acc, l) => acc + (l.rpe || 0), 0) / lastA.benchLogs.length;
+      if (avgMsp < 0.5) return '+2,5 kg (Brak MSP)';
+      if (avgMsp > 1.5) return 'Zostań / Deload (Za ciężko)';
+      return '+1-2 kg (Idealne MSP)';
+    }
+
     const lastMsp = mspFeedbackMap[dayKey];
     switch(dayKey) {
       case 'A': return lastMsp === true ? '+2,5 kg' : lastMsp === false ? 'Szlifuj MSP' : 'Ciężka Góra';
@@ -128,7 +136,14 @@ export default function Dashboard({ session }) {
                   ))}
                 </div>
                 <p className="text-[10px] font-black text-white uppercase italic">
-                  Werdykt: <span className="text-primary">{lastDayASession.msp_passed ? 'Następnym razem +2.5kg' : 'Zostań przy tym ciężarze'}</span>
+                  Werdykt: <span className="text-primary">
+                    {(() => {
+                      const avgMsp = lastDayASession.benchLogs.reduce((acc, l) => acc + (l.rpe || 0), 0) / lastDayASession.benchLogs.length;
+                      if (avgMsp < 0.5) return 'Dołóż +2.5kg (Lekko)';
+                      if (avgMsp > 1.5) return 'Zostań (Za ciężko / Grind)';
+                      return 'Dołóż +1-2kg (MSP Trafione)';
+                    })()}
+                  </span>
                 </p>
               </section>
             )}

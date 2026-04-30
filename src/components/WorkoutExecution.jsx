@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Timer, CheckCircle2, ChevronRight, Play, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Timer, CheckCircle2, ChevronRight, Play, AlertTriangle, MessageSquare, Clock, Trophy, ChevronLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { WORKOUT_PLAN } from '../data/workoutPlan';
@@ -13,7 +13,6 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
   const [restTimer, setRestTimer] = useState(null);
   const [isFinishing, setIsFinishing] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
-  const [showMspPrompt, setShowMspPrompt] = useState(false);
   const [mspFeedback, setMspFeedback] = useState(null);
   const [previousData, setPreviousData] = useState({});
 
@@ -22,28 +21,57 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
   }, []);
 
   async function fetchPreviousData() {
-    const { data: lastSessions } = await supabase
-      .from('workout_sessions')
-      .select('*, exercise_logs(*)')
-      .eq('user_id', session.user.id)
-      .eq('workout_day', dayKey)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    try {
+      const { data: lastSessions } = await supabase
+        .from('workout_sessions')
+        .select('*, exercise_logs(*)')
+        .eq('user_id', session.user.id)
+        .eq('workout_day', dayKey)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-    const prevMap = {};
-    if (lastSessions?.[0]?.exercise_logs) {
-      lastSessions[0].exercise_logs.forEach(log => {
-        if (!prevMap[log.exercise_name]) prevMap[log.exercise_name] = [];
-        prevMap[log.exercise_name].push(log);
-      });
+      const prevMap = {};
+      if (lastSessions?.[0]?.exercise_logs) {
+        lastSessions[0].exercise_logs.forEach(log => {
+          if (!prevMap[log.exercise_name]) prevMap[log.exercise_name] = [];
+          prevMap[log.exercise_name].push(log);
+        });
+      }
+      setPreviousData(prevMap);
+
+      if (plan?.exercises) {
+        const initialExercises = plan.exercises.map(ex => ({
+          ...ex,
+          sets: Array.from({ length: ex.sets }, () => ({ weight: '', reps: '', rpe: '' }))
+        }));
+        setExercises(initialExercises);
+      }
+    } catch (err) {
+      console.error('Error fetching data:', err);
     }
-    setPreviousData(prevMap);
+  }
 
-    const initialExercises = plan.exercises.map(ex => ({
-      ...ex,
-      sets: Array(ex.sets).fill({ weight: '', reps: '', rpe: '' })
-    }));
-    setExercises(initialExercises);
+  function updateSet(exIdx, setIdx, field, value) {
+    setExercises(prev => {
+      const updated = [...prev];
+      if (!updated[exIdx]) return prev;
+      
+      const exercise = { ...updated[exIdx] };
+      const sets = [...exercise.sets];
+      sets[setIdx] = { ...sets[setIdx], [field]: value };
+      exercise.sets = sets;
+      updated[exIdx] = exercise;
+      
+      // Auto-save draft
+      localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify(updated));
+      
+      // Auto-timer
+      if (field === 'reps' && value !== '' && sets[setIdx].weight !== '') {
+        setRestTimer(90);
+      }
+      
+      return updated;
+    });
   }
 
   useEffect(() => {
@@ -56,27 +84,6 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
     return () => clearInterval(interval);
   }, [restTimer]);
 
-  const updateSet = (exIdx, setIdx, field, value) => {
-    const newEx = [...exercises];
-    const newSets = [...newEx[exIdx].sets];
-    newSets[setIdx] = { ...newSets[setIdx], [field]: value };
-    newEx[exIdx].sets = newSets;
-    setExercises(newEx);
-
-    // Auto-save draft
-    localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify(newEx));
-
-    // Auto-rest timer trigger
-    if (field === 'reps' && value !== '' && newSets[setIdx].weight !== '') {
-      setRestTimer(90);
-      
-      // MSP Check trigger for Heavy Bench
-      if (newEx[exIdx].name.includes('Wyciskanie płaskie (Heavy)') && setIdx === newEx[exIdx].setsCount - 1) {
-        setShowMspPrompt(true);
-      }
-    }
-  };
-
   async function finishWorkout() {
     setIsFinishing(true);
     try {
@@ -87,7 +94,7 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         session_notes: sessionNotes,
-        msp_passed: mspFeedback
+        msp_passed: exercises.some(ex => ex.name.includes('Wyciskanie płaskie (Heavy)') && ex.sets.some(s => s.rpe === '1'))
       }]).select();
 
       const sessionId = sessionData[0].id;
@@ -112,96 +119,117 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
     } finally { setIsFinishing(false); }
   }
 
+  if (!exercises.length || !plan) return <div className="p-12 text-center text-neutral-500 font-black uppercase tracking-widest animate-pulse">Przygotowanie gryfu...</div>;
+
+  const currentEx = exercises[activeExerciseIdx];
+  const isLastExercise = activeExerciseIdx === exercises.length - 1;
+
   return (
-    <div className="flex-1 bg-background pb-32">
-      {/* Fixed Header */}
+    <div className="flex-1 bg-background flex flex-col min-h-screen pb-32">
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-neutral-900 p-4 flex justify-between items-center">
-        <button onClick={onBack} className="p-2 text-neutral-400 hover:text-white"><ChevronRight className="rotate-180" /></button>
+        <button onClick={onBack} className="p-2 text-neutral-400"><ChevronLeft /></button>
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-dayB rounded-full animate-pulse shadow-[0_0_8px_rgba(192,57,43,0.8)]" />
-            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Live Session</span>
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+            <span className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Ćwiczenie {activeExerciseIdx + 1} / {exercises.length}</span>
           </div>
-          <span className="text-[10px] font-bold text-neutral-500 uppercase mt-0.5">{plan.title}</span>
+          <span className="text-[10px] font-bold text-neutral-500 uppercase mt-0.5 truncate max-w-[150px]">{plan?.title}</span>
         </div>
-        <button onClick={finishWorkout} disabled={isFinishing} className="bg-primary text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest">{isFinishing ? '...' : 'Zakończ'}</button>
+        <div className="w-10" />
       </header>
 
-      <div className="p-4 space-y-8">
-        {exercises.map((ex, exIdx) => (
-          <section key={exIdx} className={`space-y-4 transition-opacity ${activeExerciseIdx === exIdx ? 'opacity-100' : 'opacity-40'}`} onClick={() => setActiveExerciseIdx(exIdx)}>
-            <header className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-black uppercase italic text-white tracking-tighter">{ex.name}</h3>
-                <p className="text-[10px] text-primary font-bold uppercase">{ex.target}</p>
-              </div>
-            </header>
-
-            <div className="space-y-2">
-              <div className="grid grid-cols-4 gap-2 px-2 text-[8px] font-black text-neutral-600 uppercase tracking-widest">
-                <span>Seria</span><span>KG</span><span>Reps</span><span>RPE</span>
-              </div>
-              {ex.sets.map((set, setIdx) => {
-                const prevSet = previousData[ex.name]?.[setIdx];
-                return (
-                  <div key={setIdx} className="grid grid-cols-4 gap-2 bg-neutral-900/30 p-2 rounded-xl border border-neutral-900/50">
-                    <div className="flex flex-col items-center justify-center">
-                      <span className="text-[10px] font-black text-neutral-500">{setIdx + 1}</span>
-                      {prevSet && <span className="text-[7px] text-primary font-bold">({prevSet.weight}kg)</span>}
-                    </div>
-                    <input 
-                      type="number" step="0.5"
-                      placeholder={prevSet?.weight || "0"} 
-                      value={set.weight} 
-                      onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)} 
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
-                    />
-                    <input 
-                      type="number" 
-                      placeholder={prevSet?.reps || "0"} 
-                      value={set.reps} 
-                      onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)} 
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
-                    />
-                    <input 
-                      type="number" step="0.5"
-                      placeholder="-" 
-                      value={set.rpe} 
-                      onChange={(e) => updateSet(exIdx, setIdx, 'rpe', e.target.value)} 
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-
-        <section className="space-y-3 pt-8 border-t border-neutral-900">
-          <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2"><MessageSquare size={12} /> Notatki z sesji</label>
-          <textarea value={sessionNotes} onChange={(e) => setSessionNotes(e.target.value)} placeholder="Jak się czułeś? Coś bolało? Jakieś rekordy?" className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-sm text-white min-h-[120px] outline-none focus:border-primary transition-colors" />
-        </section>
+      <div className="w-full h-1 bg-neutral-900">
+        <div 
+          className="h-full bg-primary transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
+          style={{ width: `${((activeExerciseIdx + 1) / exercises.length) * 100}%` }}
+        />
       </div>
 
-      {/* Floating Rest Timer */}
-      {restTimer !== null && (
-        <div className="fixed bottom-24 right-4 bg-primary text-white px-6 py-3 rounded-full font-black shadow-2xl shadow-primary/40 flex items-center gap-3 animate-bounce">
-          <Clock size={18} /> {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
-        </div>
-      )}
+      <main className="flex-1 p-6 space-y-8 animate-in fade-in slide-in-from-right-4 duration-300" key={activeExerciseIdx}>
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-3xl font-black uppercase italic text-white tracking-tighter leading-none">{currentEx?.name}</h2>
+            <p className="text-xs text-neutral-500 font-bold uppercase mt-2">{currentEx?.notes}</p>
+          </div>
 
-      {/* MSP Prompt Modal */}
-      {showMspPrompt && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6 backdrop-blur-sm">
-          <div className="bg-neutral-950 border-2 border-primary p-8 rounded-3xl w-full max-w-sm space-y-6 text-center shadow-[0_0_50px_rgba(59,130,246,0.3)]">
-            <Trophy className="mx-auto text-primary" size={48} />
-            <h3 className="text-xl font-black uppercase italic text-white tracking-tight">MSP CHECK</h3>
-            <p className="text-xs text-neutral-400 font-bold uppercase leading-relaxed">Czy ostatnie 2-3 powtórzenia były wyraźnie wolniejsze (MSP)?</p>
-            <div className="flex gap-4">
-              <button onClick={() => { setMspFeedback(true); setShowMspPrompt(false); }} className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs">TAK</button>
-              <button onClick={() => { setMspFeedback(false); setShowMspPrompt(false); }} className="flex-1 bg-neutral-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs">NIE</button>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+              <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Cel Planu</span>
+              <span className="text-xl font-black text-white">{currentEx?.sets.length} x {currentEx?.reps}</span>
+              <span className="text-[8px] text-primary font-bold uppercase mt-1">Tempo: {currentEx?.tempo}</span>
+            </div>
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+              <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Ostatnio</span>
+              <span className="text-xl font-black text-primary">
+                {previousData[currentEx?.name]?.[0]?.weight || '--'} <span className="text-xs text-neutral-600">KG</span>
+              </span>
+              <span className="text-[8px] text-neutral-500 font-bold uppercase mt-1">Najlepszy wynik</span>
             </div>
           </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="grid grid-cols-4 gap-2 px-2 text-[8px] font-black text-neutral-600 uppercase tracking-widest">
+            <span>Seria</span><span>KG</span><span>Reps</span><span>MSP (0-2)</span>
+          </div>
+          <div className="space-y-3">
+            {currentEx?.sets.map((set, setIdx) => {
+              const prevSet = previousData[currentEx.name]?.[setIdx];
+              return (
+                <div key={setIdx} className="grid grid-cols-4 gap-2 bg-neutral-900/30 p-2 rounded-2xl border border-neutral-900/50 focus-within:border-primary/50 transition-colors">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-xs font-black text-neutral-500">{setIdx + 1}</span>
+                    {prevSet && <span className="text-[7px] text-primary font-bold">({prevSet.reps}x)</span>}
+                  </div>
+                  <input 
+                    type="number" step="0.5"
+                    placeholder={prevSet?.weight || "0"} 
+                    value={set.weight} 
+                    onChange={(e) => updateSet(activeExerciseIdx, setIdx, 'weight', e.target.value)} 
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                  />
+                  <input 
+                    type="number" 
+                    placeholder={prevSet?.reps || "0"} 
+                    value={set.reps} 
+                    onChange={(e) => updateSet(activeExerciseIdx, setIdx, 'reps', e.target.value)} 
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                  />
+                  <input 
+                    type="number"
+                    placeholder="0" 
+                    value={set.rpe} 
+                    onChange={(e) => updateSet(activeExerciseIdx, setIdx, 'rpe', e.target.value)} 
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {isLastExercise && (
+          <section className="space-y-3 pt-8 border-t border-neutral-900">
+            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2"><MessageSquare size={12} /> Notatki końcowe</label>
+            <textarea value={sessionNotes} onChange={(e) => setSessionNotes(e.target.value)} placeholder="Jak poszło?..." className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-sm text-white min-h-[120px] outline-none focus:border-primary transition-colors" />
+          </section>
+        )}
+      </main>
+
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-neutral-900 flex gap-3">
+        {activeExerciseIdx > 0 && (
+          <button onClick={() => setActiveExerciseIdx(prev => prev - 1)} className="flex-1 bg-neutral-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs border border-neutral-800">Wstecz</button>
+        )}
+        {!isLastExercise ? (
+          <button onClick={() => setActiveExerciseIdx(prev => prev + 1)} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20">Następne Ćwiczenie</button>
+        ) : (
+          <button onClick={finishWorkout} disabled={isFinishing} className="flex-[2] bg-green-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-green-900/20">{isFinishing ? 'Zapisywanie...' : 'Zakończ Trening'}</button>
+        )}
+      </footer>
+
+      {restTimer !== null && (
+        <div className="fixed bottom-28 right-4 bg-neutral-950 border-2 border-primary text-white px-6 py-3 rounded-full font-black shadow-2xl flex items-center gap-3">
+          <Clock size={18} className="text-primary" /> {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
         </div>
       )}
     </div>
