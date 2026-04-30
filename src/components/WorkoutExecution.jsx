@@ -3,10 +3,10 @@ import { supabase } from '../lib/supabase';
 import { Timer, CheckCircle2, ChevronRight, Play, AlertTriangle, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import workoutPlan from '../data/workoutPlan';
+import { WORKOUT_PLAN } from '../data/workoutPlan';
 
 export default function WorkoutExecution({ session, dayKey, onBack }) {
-  const plan = workoutPlan.days[dayKey];
+  const plan = WORKOUT_PLAN[dayKey];
   const [startTime] = useState(new Date());
   const [exercises, setExercises] = useState(
     plan.exercises.map(ex => ({

@@ -45,7 +45,7 @@ export default function Photos({ session }) {
     const fileName = `${session.user.id}/${url.split('/').pop()}`;
     await supabase.storage.from('progress-photos').remove([fileName]);
     await supabase.from('progress_photos').delete().eq('id', id);
-    fetchStats();
+    fetchPhotos();
   }
 
   const toggleSelect = (photo) => {
