@@ -9,6 +9,7 @@ CREATE TABLE public.workout_sessions (
     date DATE DEFAULT CURRENT_DATE,
     duration_minutes INTEGER,
     session_notes TEXT,
+    msp_passed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -63,6 +64,15 @@ CREATE TABLE public.body_metrics (
     date DATE DEFAULT CURRENT_DATE,
     weight DECIMAL(5,2),
     waist DECIMAL(5,2),
+    neck DECIMAL(5,2),
+    chest DECIMAL(5,2),
+    hips DECIMAL(5,2),
+    belly DECIMAL(5,2),
+    biceps_l DECIMAL(5,2),
+    biceps_r DECIMAL(5,2),
+    forearm DECIMAL(5,2),
+    thigh DECIMAL(5,2),
+    calf DECIMAL(5,2),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     UNIQUE(user_id, date)
 );
@@ -107,6 +117,7 @@ CREATE TABLE public.oura_daily_summary (
 CREATE TABLE public.user_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     oura_token TEXT,
+    height DECIMAL(5,2),
     disciplined_streak INTEGER DEFAULT 0,
     total_disciplined_days INTEGER DEFAULT 0,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
