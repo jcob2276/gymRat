@@ -122,6 +122,9 @@ export default function Stats({ session }) {
 
   return (
     <div className="flex-1 p-6 space-y-10 pb-24">
+      <div className="text-[8px] font-black text-primary bg-primary/10 p-1 rounded text-center uppercase tracking-[0.3em]">
+        WERSJA 2.0 - NOWE POMIARY & EDYCJA CZASU
+      </div>
       {/* Progress Bar */}
       <section className="space-y-3">
         <div className="flex justify-between items-end">
