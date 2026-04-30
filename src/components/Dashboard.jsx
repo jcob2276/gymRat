@@ -10,64 +10,13 @@ import OuraWidget from './OuraWidget';
 
 
 export default function Dashboard({ session }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [view, setView] = useState('workout'); // 'workout' | 'stats' | 'photos'
   const [selectedDay, setSelectedDay] = useState(null);
-  const [habits, setHabits] = useState({
-    couch_stretch: false,
-    chin_tucks: false,
-    glute_bridge: false,
-    child_pose: false,
-    bar_hang: false,
-    protein_170g: false
-  });
 
   useEffect(() => {
-    fetchTodayHabits();
-  }, []);
-
-  async function fetchTodayHabits() {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('daily_habits')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('date', today)
-      .single();
-
-    if (data) {
-      setHabits({
-        couch_stretch: data.couch_stretch,
-        chin_tucks: data.chin_tucks,
-        glute_bridge: data.glute_bridge,
-        child_pose: data.child_pose,
-        bar_hang: data.bar_hang,
-        protein_170g: data.protein_170g
-      });
-    }
     setLoading(false);
-  }
-
-  async function toggleHabit(key) {
-    const newVal = !habits[key];
-    const today = new Date().toISOString().split('T')[0];
-    
-    setHabits(prev => ({ ...prev, [key]: newVal }));
-
-    const { error } = await supabase
-      .from('daily_habits')
-      .upsert({ 
-        user_id: session.user.id, 
-        date: today,
-        ...habits,
-        [key]: newVal 
-      }, { onConflict: 'user_id,date' });
-
-    if (error) {
-      console.error(error);
-      alert('Błąd zapisu nawyku');
-    }
-  }
+  }, []);
 
   if (selectedDay) {
     return <WorkoutExecution dayKey={selectedDay} session={session} onBack={() => setSelectedDay(null)} />;
@@ -93,34 +42,6 @@ export default function Dashboard({ session }) {
           <div className="p-6 space-y-10">
             {/* Oura Insights Widget */}
             <OuraWidget session={session} />
-
-            {/* Korekta Postawy Widget */}
-            <section>
-              <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase mb-4">🧘 Korekta Postawy</h2>
-              <div className="space-y-2">
-                {[
-                  { id: 'bar_hang', label: 'Zwis na drążku (2 min)' },
-                  { id: 'couch_stretch', label: 'Couch stretch (2 min/str)' },
-                  { id: 'chin_tucks', label: 'Chin tucks (20 powt.)' },
-                  { id: 'glute_bridge', label: 'Glute bridge (1x20)' },
-                  { id: 'child_pose', label: 'Child pose (2 min)' },
-                  { id: 'protein_170g', label: 'Białko 170g' },
-                ].map((habit) => (
-                  <button 
-                    key={habit.id}
-                    onClick={() => toggleHabit(habit.id)}
-                    className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
-                      habits[habit.id] 
-                        ? 'bg-dayC/10 border-dayC/30 text-dayC' 
-                        : 'bg-neutral-900/50 border-neutral-800 text-neutral-400'
-                    }`}
-                  >
-                    <span className="text-sm font-bold uppercase tracking-tight">{habit.label}</span>
-                    {habits[habit.id] ? <CheckCircle2 size={20} /> : <Circle size={20} className="opacity-20" />}
-                  </button>
-                ))}
-              </div>
-            </section>
 
             {/* Treningi Widget */}
             <section>

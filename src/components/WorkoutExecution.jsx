@@ -29,10 +29,9 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
   useEffect(() => {
     const draft = localStorage.getItem(`workout_draft_${dayKey}`);
     if (draft) {
-      const { logs: savedLogs, currentStep: savedStep, startTime: savedStart, notes: savedNotes } = JSON.parse(draft);
+      const { logs: savedLogs, startTime: savedStart, notes: savedNotes } = JSON.parse(draft);
       if (confirm('Masz niezapisany postęp z tego treningu. Czy chcesz go przywrócić?')) {
         setLogs(savedLogs);
-        setCurrentStep(savedStep);
         setStartTime(savedStart ? new Date(savedStart) : null);
         setSessionNotes(savedNotes || '');
       } else {
@@ -43,15 +42,14 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
 
   // Save draft on every change
   useEffect(() => {
-    if (currentStep > 0) {
+    if (startTime) {
       localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify({
         logs,
-        currentStep,
         startTime,
         notes: sessionNotes
       }));
     }
-  }, [logs, currentStep, startTime, sessionNotes, dayKey]);
+  }, [logs, startTime, sessionNotes, dayKey]);
 
   const handleStart = () => {
     setStartTime(new Date());
