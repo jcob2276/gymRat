@@ -173,10 +173,11 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
           <span className="text-[10px] font-black uppercase tracking-tighter">Zakończ sesję</span>
         </button>
         <div className="flex flex-col items-center">
-          <span className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
-            <Timer size={10} /> Aktywny trening
-          </span>
-          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 bg-dayB rounded-full animate-pulse shadow-[0_0_8px_rgba(192,57,43,0.8)]"></div>
+            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Live Session</span>
+          </div>
+          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-0.5">
             {plan.title}
           </span>
         </div>

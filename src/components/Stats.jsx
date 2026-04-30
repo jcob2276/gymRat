@@ -19,7 +19,7 @@ export default function Stats({ session }) {
   const [durationData, setDurationData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ 
-    waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', thigh: '' 
+    waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', forearm: '', thigh: '', calf: '' 
   });
   const [plateauAlert, setPlateauAlert] = useState(null); // { exercise, type: 'deload' | 'warning' }
   const [exportRange, setExportRange] = useState({ 
@@ -145,20 +145,25 @@ export default function Stats({ session }) {
       .upsert({
         user_id: session.user.id,
         date: today,
-        waist: parseFloat(newMetric.waist),
-        belly: parseFloat(newMetric.belly),
-        chest: parseFloat(newMetric.chest),
-        biceps_l: parseFloat(newMetric.biceps_l),
-        biceps_r: parseFloat(newMetric.biceps_r),
-        thigh: parseFloat(newMetric.thigh),
+        ...Object.fromEntries(Object.entries(newMetric).map(([k, v]) => [k, v ? parseFloat(v) : null]))
       }, { onConflict: 'user_id,date' });
 
     if (error) alert(error.message);
     else {
       alert('Pomiary zapisane!');
-      setNewMetric({ waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', thigh: '' });
+      setNewMetric({ waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', forearm: '', thigh: '', calf: '' });
       fetchStats();
     }
+  }
+
+  async function updateSessionTime(sessionId, field, value) {
+    const { error } = await supabase
+      .from('workout_sessions')
+      .update({ [field]: value })
+      .eq('id', sessionId);
+    
+    if (error) alert(error.message);
+    else fetchStats();
   }
 
   async function exportData() {
@@ -284,7 +289,9 @@ export default function Stats({ session }) {
               { id: 'chest', label: 'Klatka' },
               { id: 'biceps_l', label: 'Biceps L' },
               { id: 'biceps_r', label: 'Biceps P' },
+              { id: 'forearm', label: 'Przedramię' },
               { id: 'thigh', label: 'Udo' },
+              { id: 'calf', label: 'Łydka' },
             ].map(m => (
               <div key={m.id} className="space-y-1">
                 <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest ml-1">{m.label}</label>
@@ -314,67 +321,71 @@ export default function Stats({ session }) {
         <div className="space-y-3">
           <h3 className="text-[8px] font-black text-neutral-600 uppercase tracking-[0.2em] ml-1">Ostatnie Wpisy</h3>
           <div className="space-y-2">
-            {[...bodyData].reverse().slice(0, 3).map((entry, idx) => (
-              <div key={idx} className="card p-4 border-neutral-900 bg-neutral-950/50 flex justify-between items-center group">
-                <div>
-                  <p className="text-[10px] font-black text-primary uppercase mb-1">{format(parseISO(entry.date), 'dd MMMM yyyy')}</p>
-                  <div className="flex gap-4 text-[10px] font-bold text-neutral-500 uppercase">
-                    <span>Pas: <b className="text-white">{entry.belly || entry.waist}</b></span>
-                    <span>Klatka: <b className="text-white">{entry.chest || '--'}</b></span>
-                    <span>Biceps: <b className="text-white">{entry.biceps_r || '--'}</b></span>
-                  </div>
+            {[...bodyData].reverse().slice(0, 5).map((entry, idx) => (
+              <div key={idx} className="card p-4 border-neutral-900 bg-neutral-950/50 flex flex-col gap-2 group">
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-black text-primary uppercase">{format(parseISO(entry.date), 'dd MMMM yyyy')}</p>
                 </div>
-                <ChevronRight size={16} className="text-neutral-800 group-hover:text-primary transition-colors" />
+                <div className="grid grid-cols-3 gap-2 text-[8px] font-bold text-neutral-500 uppercase">
+                  <span>Pas: <b className="text-white">{entry.belly || entry.waist}</b></span>
+                  <span>Klatka: <b className="text-white">{entry.chest || '--'}</b></span>
+                  <span>Biceps L: <b className="text-white">{entry.biceps_l || '--'}</b></span>
+                  <span>Biceps P: <b className="text-white">{entry.biceps_r || '--'}</b></span>
+                  <span>Udo: <b className="text-white">{entry.thigh || '--'}</b></span>
+                  <span>Łydka: <b className="text-white">{entry.calf || '--'}</b></span>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Charts Section */}
+      {/* Training Hours Section */}
       <section className="space-y-6">
         <div className="flex justify-between items-end">
           <div>
-            <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Wykresy Postępu</h2>
-            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Talia i Podciąganie</p>
+            <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Historia Sesji</h2>
+            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Edytuj czas, jeśli zapomniałeś zapisać</p>
           </div>
         </div>
 
-        {/* Training Hours List */}
-        <div className="space-y-4">
-          <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Ostatnie Godziny Treningu</h3>
-          <div className="space-y-2">
-            {durationData.slice(0, 5).map((d, i) => (
-              <div key={i} className="card p-4 border-neutral-900 bg-neutral-950/50 flex justify-between items-center">
-                <span className="text-[10px] font-black text-neutral-400 uppercase">{d.date}</span>
-                <span className="text-[10px] font-black text-primary uppercase">{d.time}</span>
+        <div className="space-y-2">
+          {recentSessions.slice(0, 5).map((s) => (
+            <div key={s.id} className="card p-4 border-neutral-900 bg-neutral-950/50 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-neutral-500 uppercase">Dzień {s.workout_day} | {format(parseISO(s.created_at), 'dd.MM.yyyy')}</span>
+                <button onClick={() => deleteSession(s.id)} className="text-red-900 hover:text-red-500 transition-colors">
+                  <Trash2 size={14} />
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Waist Chart */}
-        <div className="card h-64 p-4 border-neutral-900">
-          <h3 className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-4">Zmiana w Pasie (cm)</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={bodyData}>
-              <XAxis dataKey="date" hide />
-              <YAxis domain={['dataMin - 2', 'dataMax + 2']} hide />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }}
-                itemStyle={{ color: '#3b82f6', fontWeight: '900', fontSize: '10px' }}
-                labelStyle={{ display: 'none' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="waist" 
-                stroke="#3b82f6" 
-                strokeWidth={4} 
-                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} 
-                activeDot={{ r: 6, strokeWidth: 0 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-neutral-600 uppercase">Start</label>
+                  <input 
+                    type="time" 
+                    value={s.start_time ? format(parseISO(s.start_time), 'HH:mm') : '00:00'}
+                    onChange={(e) => {
+                      const date = s.start_time ? s.start_time.split('T')[0] : s.created_at.split('T')[0];
+                      updateSessionTime(s.id, 'start_time', `${date}T${e.target.value}:00Z`);
+                    }}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs font-black text-white outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-neutral-600 uppercase">Koniec</label>
+                  <input 
+                    type="time" 
+                    value={s.end_time ? format(parseISO(s.end_time), 'HH:mm') : '00:00'}
+                    onChange={(e) => {
+                      const date = s.end_time ? s.end_time.split('T')[0] : s.created_at.split('T')[0];
+                      updateSessionTime(s.id, 'end_time', `${date}T${e.target.value}:00Z`);
+                    }}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs font-black text-white outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

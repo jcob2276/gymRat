@@ -11,6 +11,7 @@ export default function Photos({ session }) {
   const [gridLineX, setGridLineX] = useState(50); // percentage
   const [compareMode, setCompareMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [photoDate, setPhotoDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     fetchPhotos();
@@ -55,7 +56,7 @@ export default function Photos({ session }) {
         .insert({
           user_id: session.user.id,
           image_url: publicUrl,
-          date: new Date().toISOString().split('T')[0]
+          date: photoDate
         });
 
       if (dbError) throw dbError;
@@ -115,10 +116,18 @@ export default function Photos({ session }) {
           >
             <Split size={18} />
           </button>
-          <label className="cursor-pointer bg-primary hover:bg-blue-600 text-white p-2 rounded-lg transition-colors flex items-center justify-center">
-            {uploading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" /> : <Plus size={20} />}
-            <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} disabled={uploading} />
-          </label>
+          <div className="flex items-center gap-2">
+            <input 
+              type="date" 
+              value={photoDate}
+              onChange={(e) => setPhotoDate(e.target.value)}
+              className="bg-neutral-900 border border-neutral-800 rounded p-1.5 text-[10px] font-black text-white outline-none"
+            />
+            <label className="cursor-pointer bg-primary hover:bg-blue-600 text-white p-2 rounded-lg transition-colors flex items-center justify-center">
+              {uploading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" /> : <Plus size={20} />}
+              <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} disabled={uploading} />
+            </label>
+          </div>
         </div>
       </header>
 
