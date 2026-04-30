@@ -1,0 +1,16 @@
+{
+  "name": "Kuba Workout Tracker",
+  "short_name": "KubaTracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/ios-filled/512/3b82f6/dumbbell.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

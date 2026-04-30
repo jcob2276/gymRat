@@ -84,7 +84,6 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
     setIsFinishing(true);
     try {
       const endTime = new Date();
-      const duration = startTime ? Math.floor((endTime - startTime) / 60000) : 0;
 
       // 1. Create session
       const { data: sessionData, error: sError } = await supabase
@@ -92,7 +91,8 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
         .insert([{ 
           user_id: session.user.id, 
           workout_day: dayKey,
-          duration_minutes: duration,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
           session_notes: sessionNotes,
           msp_passed: mspFeedback
         }])
@@ -128,7 +128,7 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
       }
 
       localStorage.removeItem(`workout_draft_${dayKey}`);
-      alert(`Trening zapisany! Czas: ${duration} min.`);
+      alert(`Trening zapisany! ${format(startTime, 'HH:mm')} - ${format(endTime, 'HH:mm')}`);
       onBack();
     } catch (err) {
       console.error(err);

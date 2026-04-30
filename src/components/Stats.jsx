@@ -110,9 +110,9 @@ export default function Stats({ session }) {
     if (sessions) {
       setRecentSessions(sessions || []);
       const sessionList = sessions || [];
-      setDurationData([...sessionList].reverse().filter(s => s.duration_minutes > 0).map(s => ({
+      setDurationData([...sessionList].reverse().filter(s => s.start_time).map(s => ({
         date: format(parseISO(s.created_at), 'dd.MM'),
-        duration: s.duration_minutes
+        time: s.start_time ? `${format(parseISO(s.start_time), 'HH:mm')} - ${format(parseISO(s.end_time), 'HH:mm')}` : '--'
       })));
     }
 
@@ -183,7 +183,7 @@ export default function Stats({ session }) {
 
       sessions.forEach(s => {
         text += `## ${format(parseISO(s.created_at), 'eeee, d MMMM yyyy', { locale: pl }).toUpperCase()}\n`;
-        text += `Typ: Dzień ${s.workout_day} | Czas: ${s.duration_minutes} min\n`;
+        text += `Typ: Dzień ${s.workout_day} | Godziny: ${s.start_time ? `${format(parseISO(s.start_time), 'HH:mm')} - ${format(parseISO(s.end_time), 'HH:mm')}` : '--'}\n`;
         if (s.session_notes) text += `Notatki: ${s.session_notes}\n`;
         
         const sortedLogs = [...s.exercise_logs].sort((a, b) => a.exercise_name.localeCompare(b.exercise_name) || a.set_number - b.set_number);
@@ -337,6 +337,19 @@ export default function Stats({ session }) {
           <div>
             <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Wykresy Postępu</h2>
             <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Talia i Podciąganie</p>
+          </div>
+        </div>
+
+        {/* Training Hours List */}
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Ostatnie Godziny Treningu</h3>
+          <div className="space-y-2">
+            {durationData.slice(0, 5).map((d, i) => (
+              <div key={i} className="card p-4 border-neutral-900 bg-neutral-950/50 flex justify-between items-center">
+                <span className="text-[10px] font-black text-neutral-400 uppercase">{d.date}</span>
+                <span className="text-[10px] font-black text-primary uppercase">{d.time}</span>
+              </div>
+            ))}
           </div>
         </div>
 
