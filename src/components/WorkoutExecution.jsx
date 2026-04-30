@@ -62,20 +62,12 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
       const exerciseLogs = prev[exerciseId] || Array(plan.exercises.find(e => e.id === exerciseId).sets).fill({ weight: '', reps: '', rpe: '', isDone: false });
       const newLogs = [...exerciseLogs];
       newLogs[setIdx] = { ...newLogs[setIdx], [field]: value };
-      return { ...prev, [exerciseId]: newLogs };
-    });
-  };
-
-  const toggleSetDone = (exerciseId, setIdx) => {
-    setLogs(prev => {
-      const exerciseLogs = prev[exerciseId] || Array(plan.exercises.find(e => e.id === exerciseId).sets).fill({ weight: '', reps: '', rpe: '', isDone: false });
-      const newLogs = [...exerciseLogs];
-      const wasDone = newLogs[setIdx].isDone;
-      newLogs[setIdx] = { ...newLogs[setIdx], isDone: !wasDone };
       
-      if (!wasDone) {
+      // Auto-start rest timer if weight and reps are filled
+      if (newLogs[setIdx].weight && newLogs[setIdx].reps && !newLogs[setIdx].timerStarted) {
         setIsResting(true);
         setRestTime(0);
+        newLogs[setIdx].timerStarted = true;
       }
       
       return { ...prev, [exerciseId]: newLogs };
@@ -107,7 +99,8 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
       Object.entries(logs).forEach(([exId, sets]) => {
         const exercise = plan.exercises.find(e => e.id === Number(exId));
         sets.forEach((s, idx) => {
-          if (s.isDone) {
+          // Save if weight and reps are present
+          if (s.weight && s.reps) {
             flatLogs.push({
               session_id: sessionData.id,
               user_id: session.user.id,
@@ -201,18 +194,18 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
 
             {/* Set Table */}
             <div className="space-y-2">
-              <div className="grid grid-cols-[30px_1fr_1fr_1.5fr_40px] gap-2 px-2 text-[8px] font-black uppercase text-neutral-600 tracking-widest">
+              <div className="grid grid-cols-[30px_1fr_1fr_1.5fr] gap-2 px-2 text-[8px] font-black uppercase text-neutral-600 tracking-widest">
                 <span>Seria</span>
                 <span className="text-center">KG</span>
                 <span className="text-center">Reps</span>
                 <span className="text-center">RPE</span>
-                <span></span>
               </div>
               
               {Array(exercise.sets).fill(0).map((_, idx) => {
-                const setLog = logs[exercise.id]?.[idx] || { weight: '', reps: '', rpe: '', isDone: false };
+                const setLog = logs[exercise.id]?.[idx] || { weight: '', reps: '', rpe: '' };
+                const isCompleted = setLog.weight && setLog.reps;
                 return (
-                  <div key={idx} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${setLog.isDone ? 'bg-primary/5 border-primary/20 opacity-60' : 'bg-neutral-950 border-neutral-900'}`}>
+                  <div key={idx} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${isCompleted ? 'bg-primary/5 border-primary/20 opacity-80' : 'bg-neutral-950 border-neutral-900'}`}>
                     <div className="w-[30px] text-[10px] font-black text-neutral-700 text-center">{idx + 1}</div>
                     
                     <input 
@@ -242,13 +235,6 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
                         </button>
                       ))}
                     </div>
-
-                    <button 
-                      onClick={() => toggleSetDone(exercise.id, idx)}
-                      className={`w-10 h-10 rounded flex items-center justify-center transition-all ${setLog.isDone ? 'bg-primary text-white scale-90' : 'bg-neutral-900 text-neutral-700'}`}
-                    >
-                      <CheckCircle2 size={20} />
-                    </button>
                   </div>
                 );
               })}
