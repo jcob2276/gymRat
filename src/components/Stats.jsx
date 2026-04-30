@@ -39,7 +39,13 @@ export default function Stats({ session }) {
     const { data: body } = await supabase.from('body_metrics').select('*').eq('user_id', session.user.id).order('date', { ascending: true });
     const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).order('created_at', { ascending: false });
     const { data: oura } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(21);
-    const { data: settings } = await supabase.from('user_settings').select('height').eq('user_id', session.user.id).single();
+    
+    // Safely fetch settings - handle potential 400/missing record
+    const { data: settings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('height')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
 
     if (logs) {
       // Fix Bench Progress: Group by week and take MAX weight
@@ -241,7 +247,7 @@ export default function Stats({ session }) {
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Droga do 100 KG</p>
         </header>
 
-        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64">
+        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64 min-h-[256px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={benchData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
@@ -289,7 +295,7 @@ export default function Stats({ session }) {
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Waga i Talia w czasie</p>
         </header>
 
-        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64">
+        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64 min-h-[256px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={bodyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
@@ -316,7 +322,7 @@ export default function Stats({ session }) {
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Ostatnie 3 tygodnie gotowości</p>
         </header>
 
-        <div className="card bg-neutral-900 border-neutral-800 p-4 h-48">
+        <div className="card bg-neutral-900 border-neutral-800 p-4 h-64 min-h-[256px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={ouraTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
