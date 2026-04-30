@@ -18,7 +18,9 @@ export default function Stats({ session }) {
   const [pullupData, setPullupData] = useState([]);
   const [durationData, setDurationData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
-  const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
+  const [newMetric, setNewMetric] = useState({ 
+    waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', thigh: '' 
+  });
   const [plateauAlert, setPlateauAlert] = useState(null); // { exercise, type: 'deload' | 'warning' }
   const [exportRange, setExportRange] = useState({ 
     start: format(START_DATE, 'yyyy-MM-dd'), 
@@ -95,8 +97,13 @@ export default function Stats({ session }) {
     if (body) {
       setBodyData(body.map(b => ({
         date: format(parseISO(b.date), 'dd.MM'),
-        weight: b.weight,
-        waist: b.waist
+        waist: b.waist,
+        belly: b.belly,
+        chest: b.chest,
+        biceps_l: b.biceps_l,
+        biceps_r: b.biceps_r,
+        thigh: b.thigh,
+        calf: b.calf
       })) || []);
     }
 
@@ -138,14 +145,18 @@ export default function Stats({ session }) {
       .upsert({
         user_id: session.user.id,
         date: today,
-        weight: parseFloat(newMetric.weight),
-        waist: parseFloat(newMetric.waist)
-      });
+        waist: parseFloat(newMetric.waist),
+        belly: parseFloat(newMetric.belly),
+        chest: parseFloat(newMetric.chest),
+        biceps_l: parseFloat(newMetric.biceps_l),
+        biceps_r: parseFloat(newMetric.biceps_r),
+        thigh: parseFloat(newMetric.thigh),
+      }, { onConflict: 'user_id,date' });
 
     if (error) alert(error.message);
     else {
       alert('Pomiary zapisane!');
-      setNewMetric({ weight: '', waist: '' });
+      setNewMetric({ waist: '', belly: '', chest: '', biceps_l: '', biceps_r: '', thigh: '' });
       fetchStats();
     }
   }
@@ -254,18 +265,101 @@ export default function Stats({ session }) {
         <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase flex items-center gap-2">
           <Trophy size={14} className="text-primary" /> Progresja Bench (Cel 100kg)
         </h2>
-        <div className="h-64 card p-2 bg-neutral-950/50">
+      {/* Body Measurements Section */}
+      <section className="space-y-6">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Pomiary Obwodów</h2>
+            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Śledź centymetry, nie kilogramy</p>
+          </div>
+          <Maximize2 className="text-neutral-800" size={24} />
+        </div>
+
+        {/* Input Grid */}
+        <div className="card bg-neutral-900/50 border-neutral-800 p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { id: 'waist', label: 'Talia (najwęższe)' },
+              { id: 'belly', label: 'Pas (pępek)' },
+              { id: 'chest', label: 'Klatka' },
+              { id: 'biceps_l', label: 'Biceps L' },
+              { id: 'biceps_r', label: 'Biceps P' },
+              { id: 'thigh', label: 'Udo' },
+            ].map(m => (
+              <div key={m.id} className="space-y-1">
+                <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest ml-1">{m.label}</label>
+                <div className="relative">
+                  <input 
+                    type="number"
+                    step="0.1"
+                    placeholder="0.0"
+                    value={newMetric[m.id]}
+                    onChange={(e) => setNewMetric({ ...newMetric, [m.id]: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm font-black text-white focus:border-primary outline-none"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-neutral-700">CM</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button 
+            onClick={saveMetrics}
+            className="btn-primary w-full py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+          >
+            <Plus size={18} /> Zapisz Pomiary
+          </button>
+        </div>
+
+        {/* History List */}
+        <div className="space-y-3">
+          <h3 className="text-[8px] font-black text-neutral-600 uppercase tracking-[0.2em] ml-1">Ostatnie Wpisy</h3>
+          <div className="space-y-2">
+            {[...bodyData].reverse().slice(0, 3).map((entry, idx) => (
+              <div key={idx} className="card p-4 border-neutral-900 bg-neutral-950/50 flex justify-between items-center group">
+                <div>
+                  <p className="text-[10px] font-black text-primary uppercase mb-1">{format(parseISO(entry.date), 'dd MMMM yyyy')}</p>
+                  <div className="flex gap-4 text-[10px] font-bold text-neutral-500 uppercase">
+                    <span>Pas: <b className="text-white">{entry.belly || entry.waist}</b></span>
+                    <span>Klatka: <b className="text-white">{entry.chest || '--'}</b></span>
+                    <span>Biceps: <b className="text-white">{entry.biceps_r || '--'}</b></span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-neutral-800 group-hover:text-primary transition-colors" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Charts Section */}
+      <section className="space-y-6">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Wykresy Postępu</h2>
+            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Talia i Podciąganie</p>
+          </div>
+        </div>
+
+        {/* Waist Chart */}
+        <div className="card h-64 p-4 border-neutral-900">
+          <h3 className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-4">Zmiana w Pasie (cm)</h3>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={benchData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-              <XAxis dataKey="date" stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis domain={[70, 105]} stroke="#525252" fontSize={10} tickLine={false} axisLine={false} />
+            <LineChart data={bodyData}>
+              <XAxis dataKey="date" hide />
+              <YAxis domain={['dataMin - 2', 'dataMax + 2']} hide />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#171717', border: '1px solid #262626', borderRadius: '8px' }}
-                itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }}
+                itemStyle={{ color: '#3b82f6', fontWeight: '900', fontSize: '10px' }}
+                labelStyle={{ display: 'none' }}
               />
-              <Line type="monotone" dataKey="target" stroke="#525252" strokeDasharray="5 5" dot={false} name="Plan" />
-              <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }} name="Wynik" />
+              <Line 
+                type="monotone" 
+                dataKey="waist" 
+                stroke="#3b82f6" 
+                strokeWidth={4} 
+                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} 
+                activeDot={{ r: 6, strokeWidth: 0 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
