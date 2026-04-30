@@ -8,18 +8,43 @@ import { WORKOUT_PLAN } from '../data/workoutPlan';
 export default function WorkoutExecution({ session, dayKey, onBack }) {
   const plan = WORKOUT_PLAN[dayKey];
   const [startTime] = useState(new Date());
-  const [exercises, setExercises] = useState(
-    plan.exercises.map(ex => ({
-      ...ex,
-      sets: Array(ex.setsCount).fill({ weight: '', reps: '', rpe: '' })
-    }))
-  );
+  const [exercises, setExercises] = useState([]);
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0);
   const [restTimer, setRestTimer] = useState(null);
   const [isFinishing, setIsFinishing] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
   const [showMspPrompt, setShowMspPrompt] = useState(false);
   const [mspFeedback, setMspFeedback] = useState(null);
+  const [previousData, setPreviousData] = useState({});
+
+  useEffect(() => {
+    fetchPreviousData();
+  }, []);
+
+  async function fetchPreviousData() {
+    const { data: lastSessions } = await supabase
+      .from('workout_sessions')
+      .select('*, exercise_logs(*)')
+      .eq('user_id', session.user.id)
+      .eq('workout_day', dayKey)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const prevMap = {};
+    if (lastSessions?.[0]?.exercise_logs) {
+      lastSessions[0].exercise_logs.forEach(log => {
+        if (!prevMap[log.exercise_name]) prevMap[log.exercise_name] = [];
+        prevMap[log.exercise_name].push(log);
+      });
+    }
+    setPreviousData(prevMap);
+
+    const initialExercises = plan.exercises.map(ex => ({
+      ...ex,
+      sets: Array(ex.sets).fill({ weight: '', reps: '', rpe: '' })
+    }));
+    setExercises(initialExercises);
+  }
 
   useEffect(() => {
     let interval;
@@ -116,14 +141,38 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
               <div className="grid grid-cols-4 gap-2 px-2 text-[8px] font-black text-neutral-600 uppercase tracking-widest">
                 <span>Seria</span><span>KG</span><span>Reps</span><span>RPE</span>
               </div>
-              {ex.sets.map((set, setIdx) => (
-                <div key={setIdx} className="grid grid-cols-4 gap-2 bg-neutral-900/30 p-2 rounded-xl border border-neutral-900/50">
-                  <div className="flex items-center justify-center text-xs font-black text-neutral-500">{setIdx + 1}</div>
-                  <input type="number" placeholder="0" value={set.weight} onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" />
-                  <input type="number" placeholder="0" value={set.reps} onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" />
-                  <input type="number" placeholder="-" value={set.rpe} onChange={(e) => updateSet(exIdx, setIdx, 'rpe', e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" />
-                </div>
-              ))}
+              {ex.sets.map((set, setIdx) => {
+                const prevSet = previousData[ex.name]?.[setIdx];
+                return (
+                  <div key={setIdx} className="grid grid-cols-4 gap-2 bg-neutral-900/30 p-2 rounded-xl border border-neutral-900/50">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-black text-neutral-500">{setIdx + 1}</span>
+                      {prevSet && <span className="text-[7px] text-primary font-bold">({prevSet.weight}kg)</span>}
+                    </div>
+                    <input 
+                      type="number" step="0.5"
+                      placeholder={prevSet?.weight || "0"} 
+                      value={set.weight} 
+                      onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)} 
+                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder={prevSet?.reps || "0"} 
+                      value={set.reps} 
+                      onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)} 
+                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                    />
+                    <input 
+                      type="number" step="0.5"
+                      placeholder="-" 
+                      value={set.rpe} 
+                      onChange={(e) => updateSet(exIdx, setIdx, 'rpe', e.target.value)} 
+                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm font-black text-white text-center outline-none focus:border-primary" 
+                    />
+                  </div>
+                );
+              })}
             </div>
           </section>
         ))}
