@@ -180,13 +180,7 @@ export default function Stats({ session }) {
       const a = document.createElement('a'); a.href = url; a.download = `raport_kuba.md`; a.click();
     } finally { setIsExporting(false); }
   }
-
-  const currentBench = benchData.length > 0 ? benchData[benchData.length - 1].kg : 0;
-  const weeksPassed = Math.floor(differenceInDays(new Date(), START_DATE) / 7);
-  const weeksLeft = 12 - weeksPassed;
-  const kgNeeded = GOAL_WEIGHT - currentBench;
-  const rateNeeded = (kgNeeded / weeksLeft).toFixed(1);
-
+  
   if (loading) return <div className="p-8 text-center text-neutral-500 uppercase font-black animate-pulse tracking-widest">Wczytywanie Grande Finale...</div>;
 
   return (
@@ -274,15 +268,6 @@ export default function Stats({ session }) {
               />
             </LineChart>
           </ResponsiveContainer>
-        </div>
-
-        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 text-center">
-          <p className="text-[10px] font-black text-primary uppercase tracking-[0.1em]">
-            Zostało {weeksLeft} tygodni. Celuj w <span className="text-white">+{rateNeeded} kg/tydzień</span>, aby osiągnąć 100 kg.
-          </p>
-          {rateNeeded > 2.5 && (
-             <p className="text-[8px] text-red-400 font-bold uppercase mt-1">⚠️ Tempo musi wzrosnąć! Dołóż +2,5kg w Dniu A.</p>
-          )}
         </div>
       </section>
 
