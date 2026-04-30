@@ -134,3 +134,21 @@ CREATE POLICY "Users can manage their own Oura data" ON public.oura_daily_summar
 CREATE POLICY "Users can manage their own settings" ON public.user_settings
     FOR ALL USING (auth.uid() = user_id);
 
+
+-- 8. HARMONOGRAMY (CRON) - Uruchom w SQL Editor
+/*
+-- Wymaga rozszerzenia pg_cron w Supabase
+-- Co niedzielê o 20:00 (UTC)
+select
+  cron.schedule(
+    'weekly-sunday-report',
+    '0 20 * * 0',
+    \$\$
+    select
+      net.http_post(
+        url:='https://YOUR_PROJECT_REF.functions.supabase.co/weekly-report',
+        headers:='{\"Content-Type\": \"application/json\", \"Authorization\": \"Bearer YOUR_SERVICE_ROLE_KEY\"}'::jsonb
+      ) as request_id;
+    \$\$
+  );
+*/
