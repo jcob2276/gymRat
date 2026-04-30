@@ -7,6 +7,8 @@ export default function Photos({ session }) {
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridLineX, setGridLineX] = useState(50); // percentage
   const [compareMode, setCompareMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
 
@@ -98,6 +100,13 @@ export default function Photos({ session }) {
         <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase">📸 Zdjęcia Transformacji</h2>
         <div className="flex gap-2">
           <button 
+            onClick={() => setShowGrid(!showGrid)}
+            className={`p-2 rounded-lg border transition-colors ${showGrid ? 'bg-dayC text-white border-dayC' : 'bg-neutral-900 border-neutral-800 text-neutral-400'}`}
+            title="Analiza Postawy"
+          >
+            <Maximize2 size={18} />
+          </button>
+          <button 
             onClick={() => {
               setCompareMode(!compareMode);
               setSelectedPhotos([]);
@@ -144,6 +153,36 @@ export default function Photos({ session }) {
             onClick={() => compareMode && toggleSelect(photo)}
           >
             <img src={photo.image_url} className="w-full h-full object-cover" alt="Postęp" />
+            
+            {showGrid && (
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Grid */}
+                <div className="absolute inset-0 grid grid-cols-6 grid-rows-8 opacity-20">
+                  {Array(48).fill(0).map((_, i) => (
+                    <div key={i} className="border-[0.5px] border-primary/50"></div>
+                  ))}
+                </div>
+                {/* Drag Handle Container (Full Width) */}
+                <div 
+                  className="absolute inset-0 pointer-events-auto cursor-ew-resize"
+                  onTouchMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.touches[0].clientX - rect.left;
+                    setGridLineX(Math.max(0, Math.min(100, (x / rect.width) * 100)));
+                  }}
+                >
+                  <div 
+                    className="absolute top-0 bottom-0 w-1 bg-primary shadow-[0_0_10px_rgba(59,130,246,0.8)] pointer-events-none"
+                    style={{ left: `${gridLineX}%` }}
+                  >
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-primary rounded-full border-4 border-background flex items-center justify-center">
+                      <div className="w-1 h-2 bg-white/50 rounded-full mx-0.5"></div>
+                      <div className="w-1 h-2 bg-white/50 rounded-full mx-0.5"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button 

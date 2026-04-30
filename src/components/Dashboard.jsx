@@ -13,10 +13,29 @@ export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('workout'); // 'workout' | 'stats' | 'photos'
   const [selectedDay, setSelectedDay] = useState(null);
+  const [mspFeedbackMap, setMspFeedbackMap] = useState({}); // { dayKey: lastMspPassed }
 
   useEffect(() => {
-    setLoading(false);
+    fetchLatestMspFeedback();
   }, []);
+
+  async function fetchLatestMspFeedback() {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('workout_day, msp_passed, created_at')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (data) {
+      const feedbackMap = {};
+      data.forEach(s => {
+        if (feedbackMap[s.workout_day] === undefined) {
+          feedbackMap[s.workout_day] = s.msp_passed;
+        }
+      });
+      setMspFeedbackMap(feedbackMap);
+    }
+  }
 
   if (selectedDay) {
     return <WorkoutExecution dayKey={selectedDay} session={session} onBack={() => setSelectedDay(null)} />;
@@ -52,21 +71,31 @@ export default function Dashboard({ session }) {
                   { key: 'B', title: 'Dzień B', sub: 'Plecy / Tył Barku', color: 'dayB' },
                   { key: 'C', title: 'Dzień C', sub: 'Nogi / ATP / Core', color: 'dayC' },
                   { key: 'D', title: 'Dzień D', sub: 'Lekki Bench / Ramiona', color: 'dayD' },
-                ].map((day) => (
-                  <button 
-                    key={day.key}
-                    onClick={() => setSelectedDay(day.key)}
-                    className={`card text-left flex items-center justify-between group hover:bg-neutral-900 transition-all border-l-4 border-l-${day.color}`}
-                  >
-                    <div>
-                      <h3 className="font-black text-white uppercase italic">{day.title}</h3>
-                      <p className="text-[10px] text-neutral-500 font-bold uppercase">{day.sub}</p>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center text-neutral-700 group-hover:text-primary transition-colors">
-                      <Play size={16} fill="currentColor" />
-                    </div>
-                  </button>
-                ))}
+                ].map((day) => {
+                  const lastMsp = mspFeedbackMap[day.key];
+                  const showSuggestion = day.key === 'A' && lastMsp !== undefined;
+                  
+                  return (
+                    <button 
+                      key={day.key}
+                      onClick={() => setSelectedDay(day.key)}
+                      className={`card text-left flex items-center justify-between group hover:bg-neutral-900 transition-all border-l-4 border-l-${day.color} relative overflow-hidden`}
+                    >
+                      {showSuggestion && (
+                        <div className={`absolute top-0 right-0 px-2 py-1 text-[8px] font-black uppercase tracking-widest ${lastMsp ? 'bg-dayC text-white' : 'bg-neutral-800 text-neutral-500'}`}>
+                          {lastMsp ? 'Sugestia: +2.5kg' : 'Cel: Szlifuj MSP'}
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-black text-white uppercase italic">{day.title}</h3>
+                        <p className="text-[10px] text-neutral-500 font-bold uppercase">{day.sub}</p>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center text-neutral-700 group-hover:text-primary transition-colors">
+                        <Play size={16} fill="currentColor" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
 

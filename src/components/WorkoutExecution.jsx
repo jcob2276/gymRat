@@ -11,6 +11,8 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
   const [isFinishing, setIsFinishing] = useState(false);
   const [restTime, setRestTime] = useState(0);
   const [isResting, setIsResting] = useState(false);
+  const [mspFeedback, setMspFeedback] = useState(null); // null | true | false
+  const [showMspPrompt, setShowMspPrompt] = useState(false);
 
   // Timer logic for rest
   useEffect(() => {
@@ -66,6 +68,12 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
         setIsResting(true);
         setRestTime(0);
         newLogs[setIdx].timerStarted = true;
+
+        // Trigger MSP prompt after last set of Heavy Bench
+        const exercise = plan.exercises.find(e => e.id === exerciseId);
+        if (exercise.name.includes('Wyciskanie płaskie (Heavy)') && setIdx === exercise.sets - 1) {
+          setShowMspPrompt(true);
+        }
       }
       
       return { ...prev, [exerciseId]: newLogs };
@@ -85,7 +93,8 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
           user_id: session.user.id, 
           workout_day: dayKey,
           duration_minutes: duration,
-          session_notes: sessionNotes
+          session_notes: sessionNotes,
+          msp_passed: mspFeedback
         }])
         .select()
         .single();
@@ -264,12 +273,42 @@ export default function WorkoutExecution({ dayKey, session, onBack }) {
         <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <button 
             onClick={() => setIsResting(false)}
-            className="bg-primary text-white px-6 py-3 rounded-full font-black shadow-2xl flex items-center gap-3 border-4 border-background"
+            className={`bg-primary text-white px-6 py-3 rounded-full font-black shadow-2xl flex items-center gap-3 border-4 border-background ${showMspPrompt ? 'opacity-20 pointer-events-none' : ''}`}
           >
             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             REST: {Math.floor(restTime / 60)}:{(restTime % 60).toString().padStart(2, '0')}
-            <span className="text-[10px] opacity-50 uppercase ml-2">Kliknij by zamknąć</span>
           </button>
+        </div>
+      )}
+
+      {/* MSP Feedback Prompt */}
+      {showMspPrompt && (
+        <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in zoom-in-95 duration-300">
+          <div className="card max-w-sm w-full space-y-6 border-primary/50 shadow-[0_0_50px_rgba(59,130,246,0.2)] p-8">
+            <div className="space-y-2 text-center">
+              <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">MSP CHECK</h2>
+              <p className="text-xs text-neutral-500 font-bold uppercase tracking-widest leading-relaxed">
+                Czy ostatnie 2-3 powtórzenia w Bench Press były <span className="text-primary">wyraźnie wolniejsze</span>?
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => { setMspFeedback(true); setShowMspPrompt(false); setIsResting(true); }}
+                className="btn-primary py-4 text-xs font-black uppercase tracking-widest bg-dayC border-dayC hover:bg-dayC/80"
+              >
+                TAK (MSP OK)
+              </button>
+              <button 
+                onClick={() => { setMspFeedback(false); setShowMspPrompt(false); setIsResting(true); }}
+                className="btn-outline py-4 text-xs font-black uppercase tracking-widest border-dayB text-dayB hover:bg-dayB/10"
+              >
+                NIE (ZA CIĘŻKO)
+              </button>
+            </div>
+            <p className="text-[8px] text-center text-neutral-600 uppercase font-black tracking-tighter">
+              Twoja odpowiedź zadecyduje o ciężarze na następnym treningu.
+            </p>
+          </div>
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ export default function Stats({ session }) {
   const [durationData, setDurationData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
+  const [plateauAlert, setPlateauAlert] = useState(null); // { exercise, type: 'deload' | 'warning' }
   const [exportRange, setExportRange] = useState({ 
     start: format(START_DATE, 'yyyy-MM-dd'), 
     end: format(new Date(), 'yyyy-MM-dd') 
@@ -35,7 +36,7 @@ export default function Stats({ session }) {
     // Fetch Exercise Logs (Bench & Pullups)
     const { data: logs } = await supabase
       .from('exercise_logs')
-      .select('exercise_name, weight, reps, created_at')
+      .select('exercise_name, weight, reps, rpe, created_at')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: true });
 
@@ -71,6 +72,24 @@ export default function Stats({ session }) {
           return acc;
         }, {});
       setPullupData(Object.entries(pullups).map(([date, reps]) => ({ date, reps })) || []);
+
+      // Plateau Detection Logic
+      const benchLogs = logs.filter(l => l.exercise_name === 'Wyciskanie płaskie (Heavy)');
+      if (benchLogs.length >= 3) {
+        const last = benchLogs[benchLogs.length - 1];
+        const prev = benchLogs[benchLogs.length - 2];
+        const prev2 = benchLogs[benchLogs.length - 3];
+
+        const isWeightStalled = last.weight <= prev.weight && prev.weight <= prev2.weight;
+        const isRpeRising = last.rpe > prev.rpe || (last.rpe >= 9 && prev.rpe >= 9);
+
+        if (isWeightStalled && isRpeRising) {
+          setPlateauAlert({
+            exercise: 'Bench Press',
+            message: 'Wykryto plateau. Ciężar stoi, a zmęczenie (RPE) rośnie. Zalecany DELOAD w następnym tygodniu: 2 serie, 70% ciężaru, MSP 5+.'
+          });
+        }
+      }
     }
 
     if (body) {
@@ -200,6 +219,19 @@ export default function Stats({ session }) {
   return (
     <div className="flex-1 p-6 space-y-10 pb-24">
       
+      {/* Plateau Alert */}
+      {plateauAlert && (
+        <div className="bg-dayB/10 border-2 border-dayB/50 p-4 rounded-2xl space-y-2 animate-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-2 text-dayB">
+            <Trophy size={18} />
+            <h3 className="font-black uppercase tracking-tighter italic text-sm">ALERT: PLATEAU WYKRYTE</h3>
+          </div>
+          <p className="text-[10px] text-neutral-400 font-bold uppercase leading-relaxed">
+            {plateauAlert.message}
+          </p>
+        </div>
+      )}
+
       {/* Progress Bar */}
       <section className="space-y-3">
         <div className="flex justify-between items-end">
