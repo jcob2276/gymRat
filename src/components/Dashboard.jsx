@@ -47,7 +47,7 @@ export default function Dashboard({ session }) {
       {/* Header */}
       <header className="p-4 border-b border-neutral-800 flex justify-between items-center sticky top-0 bg-background/80 backdrop-blur-md z-20">
         <div>
-          <h1 className="font-black text-xl text-white uppercase tracking-tighter italic">Kuba Tracker</h1>
+          <h1 className="font-black text-xl text-white uppercase tracking-tighter italic">Kuba Tracker V2</h1>
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{session.user.email}</p>
         </div>
         <button onClick={() => supabase.auth.signOut()} className="p-2 text-neutral-500 hover:text-white transition-colors">
