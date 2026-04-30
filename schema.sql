@@ -21,6 +21,7 @@ CREATE TABLE public.exercise_logs (
     set_number INTEGER NOT NULL,
     reps INTEGER NOT NULL,
     weight DECIMAL(5,2),
+    rpe DECIMAL(3,1),
     is_pws_or_msp BOOLEAN DEFAULT FALSE,
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
@@ -35,6 +36,7 @@ CREATE TABLE public.daily_habits (
     chin_tucks BOOLEAN DEFAULT FALSE,
     glute_bridge BOOLEAN DEFAULT FALSE,
     child_pose BOOLEAN DEFAULT FALSE,
+    bar_hang BOOLEAN DEFAULT FALSE,
     protein_170g BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     UNIQUE(user_id, date)

@@ -18,6 +18,7 @@ export default function Dashboard({ session }) {
     chin_tucks: false,
     glute_bridge: false,
     child_pose: false,
+    bar_hang: false,
     protein_170g: false
   });
 
@@ -40,6 +41,7 @@ export default function Dashboard({ session }) {
         chin_tucks: data.chin_tucks,
         glute_bridge: data.glute_bridge,
         child_pose: data.child_pose,
+        bar_hang: data.bar_hang,
         protein_170g: data.protein_170g
       });
     }
@@ -97,6 +99,7 @@ export default function Dashboard({ session }) {
               <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase mb-4">🧘 Korekta Postawy</h2>
               <div className="space-y-2">
                 {[
+                  { id: 'bar_hang', label: 'Zwis na drążku (2 min)' },
                   { id: 'couch_stretch', label: 'Couch stretch (2 min/str)' },
                   { id: 'chin_tucks', label: 'Chin tucks (20 powt.)' },
                   { id: 'glute_bridge', label: 'Glute bridge (1x20)' },
@@ -124,10 +127,10 @@ export default function Dashboard({ session }) {
               <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase mb-4">🏋️ Plan Treningowy</h2>
               <div className="grid gap-3">
                 {[
-                  { key: 'A', title: 'Dzień A', sub: 'Góra Ciężka', color: 'dayA' },
-                  { key: 'B', title: 'Dzień B', sub: 'Plecy + Barki', color: 'dayB' },
-                  { key: 'C', title: 'Dzień C', sub: 'Nogi (Siła)', color: 'dayC' },
-                  { key: 'D', title: 'Dzień D', sub: 'Lekki Bench', color: 'dayD' },
+                  { key: 'A', title: 'Dzień A', sub: 'Góra Ciężka / Bench', color: 'dayA' },
+                  { key: 'B', title: 'Dzień B', sub: 'Plecy / Tył Barku', color: 'dayB' },
+                  { key: 'C', title: 'Dzień C', sub: 'Nogi / ATP / Core', color: 'dayC' },
+                  { key: 'D', title: 'Dzień D', sub: 'Lekki Bench / Ramiona', color: 'dayD' },
                 ].map((day) => (
                   <button 
                     key={day.key}

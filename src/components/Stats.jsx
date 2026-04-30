@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
 } from 'recharts';
-import { TrendingUp, Scale, Ruler, Trophy, Calendar, Clock, Trash2, History } from 'lucide-react';
+import { TrendingUp, Scale, Ruler, Trophy, Calendar, Clock, Trash2, History, Download, FileText } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -19,6 +19,11 @@ export default function Stats({ session }) {
   const [durationData, setDurationData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
+  const [exportRange, setExportRange] = useState({ 
+    start: format(START_DATE, 'yyyy-MM-dd'), 
+    end: format(new Date(), 'yyyy-MM-dd') 
+  });
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -123,6 +128,63 @@ export default function Stats({ session }) {
       alert('Pomiary zapisane!');
       setNewMetric({ weight: '', waist: '' });
       fetchStats();
+    }
+  }
+
+  async function exportData() {
+    setIsExporting(true);
+    try {
+      const { data: sessions, error: sError } = await supabase
+        .from('workout_sessions')
+        .select(`
+          *,
+          exercise_logs (*)
+        `)
+        .eq('user_id', session.user.id)
+        .gte('date', exportRange.start)
+        .lte('date', exportRange.end)
+        .order('date', { ascending: true });
+
+      if (sError) throw sError;
+
+      // Format for LLM/Human readability
+      let text = `# RAPORT TRENINGOWY: KUBA\n`;
+      text += `Okres: ${exportRange.start} - ${exportRange.end}\n\n`;
+
+      sessions.forEach(s => {
+        text += `## ${format(parseISO(s.created_at), 'eeee, d MMMM yyyy', { locale: pl }).toUpperCase()}\n`;
+        text += `Typ: Dzień ${s.workout_day} | Czas: ${s.duration_minutes} min\n`;
+        if (s.session_notes) text += `Notatki: ${s.session_notes}\n`;
+        
+        const sortedLogs = [...s.exercise_logs].sort((a, b) => a.exercise_name.localeCompare(b.exercise_name) || a.set_number - b.set_number);
+        
+        let currentEx = '';
+        sortedLogs.forEach(log => {
+          if (log.exercise_name !== currentEx) {
+            currentEx = log.exercise_name;
+            text += `\n### ${currentEx}\n`;
+          }
+          text += `- Seria ${log.set_number}: ${log.weight}kg x ${log.reps}${log.rpe ? ` (RPE ${log.rpe})` : ''}\n`;
+        });
+        text += `\n---\n\n`;
+      });
+
+      const blob = new Blob([text], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kuba-workout-export-${exportRange.start}-${exportRange.end}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      alert('Eksport zakończony pomyślnie!');
+    } catch (err) {
+      console.error(err);
+      alert('Błąd eksportu: ' + err.message);
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -304,6 +366,44 @@ export default function Stats({ session }) {
           </div>
           <button type="submit" className="btn-primary col-span-2 py-2 text-xs">Zapisz pomiar</button>
         </form>
+      </section>
+
+      {/* Data Export Section */}
+      <section className="card space-y-4 border-primary/20 bg-primary/5">
+        <div className="flex items-center gap-2">
+          <Download size={16} className="text-primary" />
+          <h3 className="text-xs font-black uppercase text-white tracking-widest">Eksportuj Dane do AI</h3>
+        </div>
+        <p className="text-[10px] text-neutral-500 font-bold uppercase leading-relaxed">
+          Wybierz zakres dat, aby pobrać pełną historię treningów w formacie gotowym do analizy przez Claude lub GPT.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Od</label>
+            <input 
+              type="date" 
+              value={exportRange.start}
+              onChange={e => setExportRange({...exportRange, start: e.target.value})}
+              className="input text-xs" 
+            />
+          </div>
+          <div>
+            <label className="label">Do</label>
+            <input 
+              type="date" 
+              value={exportRange.end}
+              onChange={e => setExportRange({...exportRange, end: e.target.value})}
+              className="input text-xs" 
+            />
+          </div>
+          <button 
+            onClick={exportData}
+            disabled={isExporting}
+            className="btn-primary col-span-2 py-3 text-xs flex items-center justify-center gap-2 font-black tracking-widest uppercase"
+          >
+            {isExporting ? 'Generowanie...' : <><FileText size={16} /> Pobierz Raport (.md)</>}
+          </button>
+        </div>
       </section>
 
     </div>
