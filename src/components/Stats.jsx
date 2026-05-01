@@ -16,6 +16,7 @@ export default function Stats({ session }) {
   const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
   const [ouraTrend, setOuraTrend] = useState([]);
+  const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
   const [correlation, setCorrelation] = useState(null);
   const [balanceData, setBalanceData] = useState([]);
@@ -35,6 +36,7 @@ export default function Stats({ session }) {
     const { data: body } = await supabase.from('body_metrics').select('*').eq('user_id', session.user.id).order('date', { ascending: true });
     const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).order('created_at', { ascending: false });
     const { data: oura } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(21);
+    const { data: nutrition } = await supabase.from('daily_nutrition').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(21);
     
     if (logs) {
       const benchLogs = logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie (Heavy)'));
@@ -61,6 +63,14 @@ export default function Stats({ session }) {
         date: format(parseISO(o.date), 'dd.MM'),
         readiness: o.readiness_score,
         sleep: o.total_sleep_hours
+      })));
+    }
+
+    if (nutrition) {
+      setNutritionData(nutrition.reverse().map(n => ({
+        date: format(parseISO(n.date), 'dd.MM'),
+        protein: n.protein,
+        calories: n.calories
       })));
     }
 
@@ -229,6 +239,24 @@ export default function Stats({ session }) {
                 <YAxis domain={[50, 100]} stroke="#525252" fontSize={8} />
                 <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }} />
                 <Line type="monotone" dataKey="readiness" stroke="#3b82f6" strokeWidth={3} dot={{ r: 3, fill: '#3b82f6' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Protein Intake (Goal: 150g)</h2>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 h-64 overflow-hidden">
+          <div className="w-full h-full min-w-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={nutritionData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                <XAxis dataKey="date" stroke="#525252" fontSize={8} />
+                <YAxis domain={[0, 200]} stroke="#525252" fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }} />
+                <ReferenceLine y={150} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'GOAL', position: 'right', fill: '#ef4444', fontSize: 10, fontWeight: 'bold' }} />
+                <Line type="monotone" dataKey="protein" name="Białko (g)" stroke="#3b82f6" strokeWidth={3} dot={{ r: 3, fill: '#3b82f6' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
