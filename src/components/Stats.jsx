@@ -11,7 +11,6 @@ const START_DATE = new Date('2026-04-26');
 
 export default function Stats({ session }) {
   const [loading, setLoading] = useState(true);
-  const [benchData, setBenchData] = useState([]);
   const [bodyData, setBodyData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
   const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
@@ -19,7 +18,6 @@ export default function Stats({ session }) {
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
   const [correlation, setCorrelation] = useState(null);
-  const [balanceData, setBalanceData] = useState([]);
   const [exportRange, setExportRange] = useState({ 
     start: format(addWeeks(new Date(), -4), 'yyyy-MM-dd'), 
     end: format(new Date(), 'yyyy-MM-dd') 
@@ -39,17 +37,6 @@ export default function Stats({ session }) {
     const { data: nutrition } = await supabase.from('daily_nutrition').select('*').order('date', { ascending: false }).limit(30);
     
     if (logs) {
-      const benchLogs = logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie (Heavy)'));
-      const weeklyGroups = {};
-      benchLogs.forEach(l => {
-        const weekNum = Math.floor(differenceInDays(parseISO(l.created_at), START_DATE) / 7) + 1;
-        const weekKey = `T${weekNum}`;
-        if (!weeklyGroups[weekKey] || l.weight > weeklyGroups[weekKey].kg) {
-          weeklyGroups[weekKey] = { week: weekKey, kg: l.weight, msp: l.workout_sessions?.msp_passed };
-        }
-      });
-      setBenchData(Object.values(weeklyGroups));
-
       const now = new Date();
       const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
       const thisWeekSessions = sessions?.filter(s => parseISO(s.created_at) >= thisWeekStart).length || 0;
@@ -72,35 +59,6 @@ export default function Stats({ session }) {
         protein: n.protein,
         calories: n.calories
       })));
-    }
-
-    if (logs && body) {
-      const benchLogs = logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie (Heavy)'));
-      const pullupLogs = logs.filter(l => l.exercise_name.includes('Pull-upy szerokie'));
-      const weeklyBalance = {};
-      const getWeightForDate = (dateStr) => {
-        const logDate = new Date(dateStr);
-        const closest = body.filter(b => new Date(b.date) <= logDate).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-        return closest ? parseFloat(closest.weight) : 80;
-      };
-      const calculate1RM = (weight, reps) => weight * (1 + reps / 30);
-
-      benchLogs.forEach(l => {
-        const weekKey = `T${Math.floor(differenceInDays(parseISO(l.created_at), START_DATE) / 7) + 1}`;
-        const rm = calculate1RM(l.weight, l.reps);
-        if (!weeklyBalance[weekKey]) weeklyBalance[weekKey] = { week: weekKey };
-        if (!weeklyBalance[weekKey].bench || rm > weeklyBalance[weekKey].bench) weeklyBalance[weekKey].bench = Math.round(rm);
-      });
-
-      pullupLogs.forEach(l => {
-        const weekKey = `T${Math.floor(differenceInDays(parseISO(l.created_at), START_DATE) / 7) + 1}`;
-        const bw = getWeightForDate(l.created_at);
-        const totalWeight = bw + (l.weight || 0);
-        const rm = calculate1RM(totalWeight, l.reps);
-        if (!weeklyBalance[weekKey]) weeklyBalance[weekKey] = { week: weekKey };
-        if (!weeklyBalance[weekKey].pullup || rm > weeklyBalance[weekKey].pullup) weeklyBalance[weekKey].pullup = Math.round(rm);
-      });
-      setBalanceData(Object.values(weeklyBalance).sort((a, b) => a.week.localeCompare(b.week)));
     }
 
     if (sessions) {
@@ -171,41 +129,6 @@ export default function Stats({ session }) {
             </div>
           </div>
           <button onClick={saveMetrics} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest">Zapisz Pomiary</button>
-        </div>
-      </section>
-
-      <section className="space-y-6">
-        <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Bench Progress</h2>
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 h-64 overflow-hidden">
-          <div className="w-full h-full min-w-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={benchData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                <XAxis dataKey="week" stroke="#525252" fontSize={10} />
-                <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke="#525252" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }} />
-                <Line type="monotone" dataKey="kg" stroke="#3b82f6" strokeWidth={4} dot={{ r: 6, fill: '#3b82f6' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-6">
-        <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">Balance Audit</h2>
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 h-64 overflow-hidden">
-          <div className="w-full h-full min-w-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={balanceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                <XAxis dataKey="week" stroke="#525252" fontSize={10} />
-                <YAxis domain={['dataMin - 10', 'dataMax + 10']} stroke="#525252" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }} />
-                <Line type="monotone" dataKey="bench" name="Bench" stroke="#ffffff" strokeWidth={3} dot={{ r: 4, fill: '#ffffff' }} />
-                <Line type="monotone" dataKey="pullup" name="Pull-up" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </div>
       </section>
 
