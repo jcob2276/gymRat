@@ -33,6 +33,8 @@ Aplikacja opiera się na dwóch kluczowych technikach:
 - `daily_habits`: Śledzenie nawyków (obecnie uproszczone/ukryte na prośbę użytkownika).
 - `body_metrics`: Waga i talia.
 - `oura_daily_summary`: Dane z pierścienia Oura (Readiness, Sleep).
+- `daily_nutrition`: Dzienne podsumowanie kalorii i białka (sync z Yazio).
+- `daily_food_entries`: Szczegółowa lista zjedzonych produktów (sync z Yazio) do raportów.
 
 ## 6. Zasady Designu
 - **Kolory**: Tło `#0a0a0a`, karty `#171717`.

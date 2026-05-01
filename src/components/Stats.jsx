@@ -23,6 +23,7 @@ export default function Stats({ session }) {
     end: format(new Date(), 'yyyy-MM-dd') 
   });
   const [isExporting, setIsExporting] = useState(false);
+  const [includeYazio, setIncludeYazio] = useState(true);
 
   useEffect(() => {
     fetchStats();
@@ -93,16 +94,67 @@ export default function Stats({ session }) {
   async function exportData() {
     setIsExporting(true);
     try {
-      const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).gte('date', exportRange.start).lte('date', exportRange.end);
-      let text = `# RAPORT TRENINGOWY KUBA\n\n`;
-      sessions?.forEach(s => {
-        text += `## ${format(parseISO(s.created_at), 'd MMMM yyyy', { locale: pl })} - Dzień ${s.workout_day}\n`;
-        s.exercise_logs.forEach(l => { text += `- ${l.exercise_name}: ${l.weight}kg x ${l.reps}\n`; });
-        text += `\n---\n`;
+      const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).gte('date', exportRange.start).lte('date', exportRange.end).order('date', { ascending: true });
+      
+      let foodData = [];
+      if (includeYazio) {
+        const { data } = await supabase.from('daily_food_entries').select('*').eq('user_id', session.user.id).gte('date', exportRange.start).lte('date', exportRange.end).order('date', { ascending: true });
+        foodData = data || [];
+      }
+
+      let text = `# RAPORT TRENINGOWY KUBA\n`;
+      text += `Okres: ${exportRange.start} do ${exportRange.end}\n\n`;
+
+      // Group by date
+      const dates = [...new Set([
+        ...sessions.map(s => s.date),
+        ...foodData.map(f => f.date)
+      ])].sort();
+
+      dates.forEach(dateStr => {
+        const daySessions = sessions.filter(s => s.date === dateStr);
+        const dayFood = foodData.filter(f => f.date === dateStr);
+        
+        if (daySessions.length === 0 && dayFood.length === 0) return;
+
+        text += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n\n`;
+
+        if (daySessions.length > 0) {
+          daySessions.forEach(s => {
+            text += `### 🏋️ Trening: Dzień ${s.workout_day}\n`;
+            s.exercise_logs.forEach(l => { 
+              text += `- **${l.exercise_name}**: ${l.weight}kg x ${l.reps} ${l.is_pws_or_msp ? '🔥' : ''}\n`; 
+            });
+            text += `\n`;
+          });
+        }
+
+        if (dayFood.length > 0) {
+          text += `### 🥗 Dieta (Yazio)\n`;
+          const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+          const sortedFood = [...dayFood].sort((a, b) => mealOrder.indexOf(a.meal_type) - mealOrder.indexOf(b.meal_type));
+          
+          let lastMeal = '';
+          sortedFood.forEach(f => {
+            if (f.meal_type !== lastMeal) {
+              const mealNames = { breakfast: 'Śniadanie', lunch: 'Obiad', dinner: 'Kolacja', snack: 'Przekąski' };
+              text += `#### ${mealNames[f.meal_type] || f.meal_type}\n`;
+              lastMeal = f.meal_type;
+            }
+            text += `- ${f.name} (${f.amount}): **${f.calories} kcal**, ${f.protein}g B\n`;
+          });
+
+          const dayTotalCal = dayFood.reduce((acc, f) => acc + (f.calories || 0), 0);
+          const dayTotalProt = dayFood.reduce((acc, f) => acc + (f.protein || 0), 0);
+          text += `\n**SUMA DNIA: ${dayTotalCal} kcal | ${dayTotalProt.toFixed(1)}g Białka**\n\n`;
+        }
+
+        text += `---\n\n`;
       });
+
       const blob = new Blob([text], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `raport_kuba.md`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `raport_kuba_${exportRange.start}.md`; a.click();
     } finally { setIsExporting(false); }
   }
   
@@ -214,6 +266,16 @@ export default function Stats({ session }) {
 
       <section className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-4">
         <h3 className="text-xs font-black uppercase text-primary">Eksportuj Raport</h3>
+        <div className="flex items-center gap-3 mb-2 px-1">
+          <input 
+            type="checkbox" 
+            id="includeYazio" 
+            checked={includeYazio} 
+            onChange={(e) => setIncludeYazio(e.target.checked)}
+            className="w-4 h-4 accent-primary"
+          />
+          <label htmlFor="includeYazio" className="text-[10px] font-bold text-neutral-400 uppercase cursor-pointer">Dołącz dane z Yazio</label>
+        </div>
         <button onClick={exportData} disabled={isExporting} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest">Pobierz .md</button>
       </section>
     </div>

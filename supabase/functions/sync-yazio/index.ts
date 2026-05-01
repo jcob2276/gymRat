@@ -46,14 +46,16 @@ serve(async (req) => {
 
     for (let i = 0; i < daysToSync; i++) {
       const targetDate = new Date()
-      // If sync_history, go back i days. If normal, handle the "yesterday" logic.
       if (sync_history) {
         targetDate.setDate(targetDate.getDate() - i)
       } else if (targetDate.getHours() < 4) {
         targetDate.setDate(targetDate.getDate() - 1)
       }
 
+      const dateStr = targetDate.toISOString().split('T')[0]
+
       try {
+        // 1. Get Daily Summary (for totals)
         const summary = await yazio.user.getDailySummary({ date: targetDate })
     
         const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -68,8 +70,6 @@ serve(async (req) => {
           }
         })
 
-        const dateStr = targetDate.toISOString().split('T')[0]
-        
         if (totalCalories > 0 || totalProtein > 0) {
           await supabase.from('daily_nutrition').upsert({
             user_id: userId,
@@ -77,13 +77,33 @@ serve(async (req) => {
             calories: Math.round(totalCalories),
             protein: parseFloat(totalProtein.toFixed(2))
           }, { onConflict: 'user_id,date' })
-          results.push({ date: dateStr, success: true })
         }
+
+        // 2. Get Individual Consumed Items (for details)
+        const consumedItems = await yazio.user.getConsumedItems({ date: targetDate })
+        
+        if (consumedItems && consumedItems.length > 0) {
+          // Delete existing entries for this day to avoid duplicates
+          await supabase.from('daily_food_entries').delete().eq('user_id', userId).eq('date', dateStr)
+
+          const foodEntries = consumedItems.map((item: any) => ({
+            user_id: userId,
+            date: dateStr,
+            name: item.name || 'Unknown Food',
+            calories: Math.round(item.nutrients?.["energy.energy"] || 0),
+            protein: parseFloat((item.nutrients?.["nutrient.protein"] || 0).toFixed(2)),
+            meal_type: item.daytime,
+            amount: `${item.amount} ${item.serving || ''}`.trim()
+          }))
+
+          await supabase.from('daily_food_entries').insert(foodEntries)
+        }
+
+        results.push({ date: dateStr, success: true })
       } catch (e) {
-        console.error(`Error syncing date ${targetDate.toISOString()}:`, e)
+        console.error(`Error syncing date ${dateStr}:`, e)
       }
       
-      // Small delay to prevent rate limits
       if (sync_history) await new Promise(r => setTimeout(r, 200))
     }
 
