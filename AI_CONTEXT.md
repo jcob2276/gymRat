@@ -1,7 +1,7 @@
-# AI Context: Kuba Workout App (Grande Finale 2.0)
+# AI Context: Workout App (Grande Finale 2.0)
 
 ## 1. Cel Projektu
-Aplikacja służy do cyfryzacji i śledzenia 12-tygodniowego planu treningowego "Grande Finale 2.0". Głównym celem użytkownika (Kuba) jest osiągnięcie **100 kg w wyciskaniu leżąc (Bench Press)** przy jednoczesnej poprawie postawy (walka z ATP i protrakcją) oraz budowie sylwetki V-Shape.
+Aplikacja służy do cyfryzacji i śledzenia 12-tygodniowego planu treningowego "Grande Finale 2.0". Głównym celem użytkownika jest osiągnięcie wyznaczonych celów siłowych...
 
 ## 2. Tech Stack
 - **Frontend**: React + Vite
