@@ -24,6 +24,7 @@ export default function Stats({ session }) {
   });
   const [isExporting, setIsExporting] = useState(false);
   const [includeYazio, setIncludeYazio] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -88,6 +89,32 @@ export default function Stats({ session }) {
     if (confirm('Usunąć trening?')) {
       await supabase.from('workout_sessions').delete().eq('id', id);
       fetchStats();
+    }
+  }
+
+  async function syncHistory() {
+    setIsSyncing(true);
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-yazio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authSession.access_token}`
+        },
+        body: JSON.stringify({ userId: session.user.id, sync_history: true })
+      });
+      const res = await response.json();
+      if (res.success) {
+        alert(`Zsynchronizowano ${res.synced_days} dni!`);
+        fetchStats();
+      } else {
+        alert('Błąd synchronizacji: ' + res.error);
+      }
+    } catch (err) {
+      alert('Błąd połączenia z funkcją');
+    } finally {
+      setIsSyncing(false);
     }
   }
 
@@ -266,17 +293,57 @@ export default function Stats({ session }) {
 
       <section className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-4">
         <h3 className="text-xs font-black uppercase text-primary">Eksportuj Raport</h3>
-        <div className="flex items-center gap-3 mb-2 px-1">
-          <input 
-            type="checkbox" 
-            id="includeYazio" 
-            checked={includeYazio} 
-            onChange={(e) => setIncludeYazio(e.target.checked)}
-            className="w-4 h-4 accent-primary"
-          />
-          <label htmlFor="includeYazio" className="text-[10px] font-bold text-neutral-400 uppercase cursor-pointer">Dołącz dane z Yazio</label>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Od:</label>
+            <input 
+              type="date" 
+              value={exportRange.start} 
+              onChange={e => setExportRange({...exportRange, start: e.target.value})}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Do:</label>
+            <input 
+              type="date" 
+              value={exportRange.end} 
+              onChange={e => setExportRange({...exportRange, end: e.target.value})}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
+            />
+          </div>
         </div>
-        <button onClick={exportData} disabled={isExporting} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest">Pobierz .md</button>
+
+        <div className="flex flex-col gap-3 pt-2">
+          <div className="flex items-center gap-3 px-1">
+            <input 
+              type="checkbox" 
+              id="includeYazio" 
+              checked={includeYazio} 
+              onChange={(e) => setIncludeYazio(e.target.checked)}
+              className="w-4 h-4 accent-primary"
+            />
+            <label htmlFor="includeYazio" className="text-[10px] font-bold text-neutral-400 uppercase cursor-pointer">Dołącz dane z Yazio</label>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              onClick={syncHistory} 
+              disabled={isSyncing} 
+              className="bg-neutral-900 text-neutral-400 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest border border-neutral-800 hover:text-white transition-colors"
+            >
+              {isSyncing ? 'Sync...' : 'Sync Yazio (30 dni)'}
+            </button>
+            <button 
+              onClick={exportData} 
+              disabled={isExporting} 
+              className="bg-primary text-white py-3 rounded-xl text-[8px] font-black uppercase tracking-widest"
+            >
+              {isExporting ? 'Generowanie...' : 'Pobierz .md'}
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );
