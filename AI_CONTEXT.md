@@ -27,6 +27,11 @@ Aplikacja opiera się na dwóch kluczowych technikach:
 - **Charts**: Wizualizacja progresu w Bench Press, wagi ciała oraz obwodu talii.
 - **Export dla AI**: Funkcja generowania raportu `.md` z wybranego okresu, sformatowanego pod analizę przez LLM (Claude/GPT).
 
+### Kierunek (Power List)
+- **5 Zwycięstw**: Codzienna lista zadań z kategorii Ciało/Duch/Konto.
+- **Dyscyplina**: Wizualizacja sukcesów (Z) i porażek (P) w formie 30-dniowego gridu.
+- **Context**: Stały podgląd na cele nadrzędne podczas planowania dnia.
+
 ## 5. Struktura Bazy Danych (Supabase)
 - `workout_sessions`: ID sesji, data, czas trwania, notatki.
 - `exercise_logs`: Szczegóły serii (exercise_name, reps, weight, rpe).
@@ -35,6 +40,8 @@ Aplikacja opiera się na dwóch kluczowych technikach:
 - `oura_daily_summary`: Dane z pierścienia Oura (Readiness, Sleep).
 - `daily_nutrition`: Dzienne podsumowanie kalorii i białka (sync z Yazio).
 - `daily_food_entries`: Szczegółowa lista zjedzonych produktów (sync z Yazio) do raportów.
+- `life_goals`: Główne cele życiowe (Ciało, Duch, Konto).
+- `daily_wins`: Power List - 5 zadań dziennie i wynik dnia (Z/P).
 
 ## 6. Zasady Designu
 - **Kolory**: Tło `#0a0a0a`, karty `#171717`.

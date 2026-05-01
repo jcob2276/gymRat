@@ -18,11 +18,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { userId, sync_history } = await req.json().catch(() => ({ userId: null, sync_history: false }))
-    console.log(`Function sync-yazio triggered. User: ${userId}, History Mode: ${sync_history}`)
+    const { userId, sync_history, days } = await req.json().catch(() => ({ userId: null, sync_history: false, days: null }))
+    console.log(`Function sync-yazio triggered. User: ${userId}, History Mode: ${sync_history}, Days: ${days}`)
     if (!userId) throw new Error('Missing userId')
 
-    // ... (Get Credentials stays same)
+    // ... (Credentials logic remains)
     const { data: settings, error: settingsError } = await supabase
       .from('user_settings')
       .select('yazio_username, yazio_password, yazio_token')
@@ -41,7 +41,7 @@ serve(async (req) => {
       credentials: { username: settings.yazio_username, password: settings.yazio_password },
     })
 
-    const daysToSync = sync_history ? 30 : 1
+    const daysToSync = days || (sync_history ? 60 : 1)
     const results = []
 
     for (let i = 0; i < daysToSync; i++) {

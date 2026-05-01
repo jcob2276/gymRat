@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History } from 'lucide-react';
+import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
 import Photos from './Photos';
+import Direction from './Direction';
 import OuraWidget from './OuraWidget';
 import { format, parseISO } from 'date-fns';
 
@@ -174,12 +175,16 @@ export default function Dashboard({ session }) {
         )}
         {view === 'stats' && <Stats session={session} />}
         {view === 'photos' && <Photos session={session} />}
+        {view === 'direction' && <Direction session={session} />}
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 w-full max-w-md bg-background/90 backdrop-blur-xl border-t border-neutral-800 p-3 flex justify-around items-center z-30">
         <button onClick={() => setView('workout')} className={`flex flex-col items-center gap-1 transition-colors ${view === 'workout' ? 'text-primary' : 'text-neutral-500'}`}>
           <Dumbbell size={24} /><span className="text-[8px] font-bold uppercase">Trening</span>
+        </button>
+        <button onClick={() => setView('direction')} className={`flex flex-col items-center gap-1 transition-colors ${view === 'direction' ? 'text-primary' : 'text-neutral-500'}`}>
+          <Compass size={24} /><span className="text-[8px] font-bold uppercase">Kierunek</span>
         </button>
         <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1 transition-colors ${view === 'stats' ? 'text-primary' : 'text-neutral-500'}`}>
           <BarChart2 size={24} /><span className="text-[8px] font-bold uppercase">Statystyki</span>

@@ -1,0 +1,305 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle } from 'lucide-react';
+import { format, subDays, startOfDay, parseISO, differenceInDays, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { pl } from 'date-fns/locale';
+
+export default function Direction({ session }) {
+  const [loading, setLoading] = useState(true);
+  const [lifeGoals, setLifeGoals] = useState({ goal_cialo: '', goal_duch: '', goal_konto: '' });
+  const [isEditingGoals, setIsEditingGoals] = useState(false);
+  const [todayWin, setTodayWin] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [newTaskForm, setNewTaskForm] = useState(
+    Array(5).fill({ task: '', category: 'cialo' })
+  );
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Fetch Life Goals
+    const { data: goals } = await supabase
+      .from('life_goals')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+    
+    if (goals) setLifeGoals(goals);
+
+    // Fetch Today's Win
+    const { data: todayData } = await supabase
+      .from('daily_wins')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('date', today)
+      .single();
+    
+    setTodayWin(todayData);
+
+    // Fetch History (last 60 days for stats)
+    const { data: historyData } = await supabase
+      .from('daily_wins')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('date', { ascending: false })
+      .limit(60);
+    
+    setHistory(historyData || []);
+    setLoading(false);
+  }
+
+  async function saveLifeGoals() {
+    const { error } = await supabase
+      .from('life_goals')
+      .upsert({ user_id: session.user.id, ...lifeGoals }, { onConflict: 'user_id' });
+    
+    if (!error) setIsEditingGoals(false);
+    else alert('Błąd zapisu celów');
+  }
+
+  async function startNewDay() {
+    if (newTaskForm.some(t => !t.task.trim())) {
+      alert('Wypełnij wszystkie 5 zadań!');
+      return;
+    }
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const entry = {
+      user_id: session.user.id,
+      date: today,
+      task_1: newTaskForm[0].task, category_1: newTaskForm[0].category,
+      task_2: newTaskForm[1].task, category_2: newTaskForm[1].category,
+      task_3: newTaskForm[2].task, category_3: newTaskForm[2].category,
+      task_4: newTaskForm[3].task, category_4: newTaskForm[3].category,
+      task_5: newTaskForm[4].task, category_5: newTaskForm[4].category,
+    };
+
+    const { data, error } = await supabase.from('daily_wins').insert(entry).select().single();
+    if (!error) setTodayWin(data);
+    else alert('Błąd startu dnia');
+  }
+
+  async function toggleTask(index) {
+    if (!todayWin) return;
+    const field = `done_${index + 1}`;
+    const newValue = !todayWin[field];
+    
+    // Check if all 5 will be done
+    const allDone = [1, 2, 3, 4, 5].every(i => {
+      if (i === index + 1) return newValue;
+      return todayWin[`done_${i}`];
+    });
+
+    const updates = { [field]: newValue };
+    if (allDone) updates.result = 'Z';
+    else updates.result = null; // Still in progress if not all done
+
+    const { data, error } = await supabase
+      .from('daily_wins')
+      .update(updates)
+      .eq('id', todayWin.id)
+      .select()
+      .single();
+    
+    if (!error) setTodayWin(data);
+  }
+
+  // Stats logic
+  const getStats = () => {
+    if (!history.length) return { streak: 0, weeklyWin: false, monthlyWin: false };
+
+    // Streak
+    let streak = 0;
+    const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Start from today or yesterday
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+    
+    let currentIdx = 0;
+    if (sortedHistory[0]?.date === todayStr || sortedHistory[0]?.date === yesterdayStr) {
+      for (const day of sortedHistory) {
+        if (day.result === 'Z') streak++;
+        else if (day.date !== todayStr) break; // Break if not today and not Z
+      }
+    }
+
+    // Weekly Win (max 2P in current week)
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const weekDays = history.filter(d => parseISO(d.date) >= weekStart);
+    const weeklyP = weekDays.filter(d => d.result === 'P').length;
+    const weeklyWin = weeklyP <= 2 && weekDays.some(d => d.result === 'Z');
+
+    return { streak, weeklyWin, weeklyP };
+  };
+
+  const { streak, weeklyWin, weeklyP } = getStats();
+
+  if (loading) return <div className="p-8 text-center text-neutral-500 uppercase font-black animate-pulse tracking-widest">Wczytywanie Kierunku...</div>;
+
+  return (
+    <div className="flex-1 p-6 space-y-10 pb-24 overflow-y-auto">
+      {/* Header: Life Goals */}
+      <section className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+            <Compass size={12} /> Twoje Cele (Context)
+          </h2>
+          <button onClick={() => isEditingGoals ? saveLifeGoals() : setIsEditingGoals(true)} className="text-neutral-500 hover:text-white p-2">
+            {isEditingGoals ? <Save size={16} /> : <Edit2 size={16} />}
+          </button>
+        </div>
+
+        <div className="grid gap-3">
+          {[
+            { key: 'goal_cialo', label: 'Ciało', icon: <Shield size={14} className="text-dayC" /> },
+            { key: 'goal_duch', label: 'Duch', icon: <Zap size={14} className="text-dayA" /> },
+            { key: 'goal_konto', label: 'Konto', icon: <Wallet size={14} className="text-dayD" /> },
+          ].map((g) => (
+            <div key={g.key} className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 flex items-center gap-4">
+              <div className="w-8 h-8 rounded-full bg-neutral-950 flex items-center justify-center border border-neutral-800">
+                {g.icon}
+              </div>
+              <div className="flex-1">
+                <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">{g.label}</p>
+                {isEditingGoals ? (
+                  <input 
+                    value={lifeGoals[g.key]} 
+                    onChange={(e) => setLifeGoals({...lifeGoals, [g.key]: e.target.value})}
+                    className="w-full bg-transparent border-b border-primary/30 outline-none text-[10px] font-bold text-white pt-1"
+                  />
+                ) : (
+                  <p className="text-[10px] font-bold text-white uppercase italic">{lifeGoals[g.key] || '---'}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Main Section: Daily Wins */}
+      <section className="space-y-6">
+        <header className="flex justify-between items-end">
+          <div>
+            <h1 className="text-2xl font-black uppercase italic text-white tracking-tighter">Power List</h1>
+            <p className="text-[8px] font-black text-primary uppercase tracking-widest">Wygraj Dzień. Wygraj Życie.</p>
+          </div>
+          {todayWin?.result === 'Z' && <div className="bg-dayC/20 text-dayC px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-dayC/30 animate-bounce">Dzień Wygrany!</div>}
+        </header>
+
+        {!todayWin ? (
+          /* Formularz Nowego Dnia */
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
+            <h3 className="text-[10px] font-black text-white uppercase tracking-widest text-center">Zdefiniuj 5 Zwycięstw na Dziś</h3>
+            <div className="space-y-3">
+              {newTaskForm.map((t, i) => (
+                <div key={i} className="flex gap-2">
+                  <select 
+                    value={t.category} 
+                    onChange={(e) => {
+                      const n = [...newTaskForm]; n[i].category = e.target.value; setNewTaskForm(n);
+                    }}
+                    className="bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[8px] font-black uppercase outline-none focus:border-primary text-neutral-400"
+                  >
+                    <option value="cialo">Ciało</option>
+                    <option value="duch">Duch</option>
+                    <option value="konto">Konto</option>
+                  </select>
+                  <input 
+                    placeholder={`Zadanie ${i+1}`}
+                    value={t.task}
+                    onChange={(e) => {
+                      const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
+                    }}
+                    className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
+                  />
+                </div>
+              ))}
+            </div>
+            <button onClick={startNewDay} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20">Zatwierdź Listę</button>
+          </div>
+        ) : (
+          /* Lista Zadań */
+          <div className="space-y-3">
+            {[0,1,2,3,4].map((i) => {
+              const task = todayWin[`task_${i+1}`];
+              const category = todayWin[`category_${i+1}`];
+              const done = todayWin[`done_${i+1}`];
+              const colorClass = category === 'cialo' ? 'border-dayC text-dayC' : category === 'duch' ? 'border-dayA text-dayA' : 'border-dayD text-dayD';
+              
+              return (
+                <button 
+                  key={i} 
+                  onClick={() => toggleTask(i)}
+                  className={`w-full card p-5 flex items-center justify-between group transition-all ${done ? 'opacity-40 grayscale' : 'hover:bg-neutral-900/50'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded border-2 flex items-center justify-center ${done ? 'bg-dayC border-dayC text-white' : 'border-neutral-800 text-neutral-700'}`}>
+                      {done ? <CheckSquare size={16} /> : <Target size={16} />}
+                    </div>
+                    <div className="text-left">
+                      <p className={`text-[8px] font-black uppercase tracking-widest opacity-60`}>{category}</p>
+                      <p className={`text-xs font-black uppercase italic ${done ? 'line-through' : 'text-white'}`}>{task}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Visualization & Stats */}
+      <section className="space-y-6 pt-4 border-t border-neutral-900">
+        <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+          <Calendar size={12} /> Postęp (30 Dni)
+        </h2>
+
+        {/* Grid 30-dniowy */}
+        <div className="flex flex-wrap gap-2 justify-center">
+          {Array.from({ length: 30 }).map((_, i) => {
+            const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd');
+            const dayData = history.find(d => d.date === date);
+            const color = dayData?.result === 'Z' ? 'bg-dayC' : dayData?.result === 'P' ? 'bg-dayB' : 'bg-neutral-900';
+            const isActive = dayData?.result != null;
+
+            return (
+              <div 
+                key={i} 
+                className={`w-6 h-6 rounded-sm ${color} ${!isActive && 'border border-neutral-900'} relative group`}
+              >
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-neutral-950 px-2 py-1 rounded text-[8px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                  {format(parseISO(date), 'dd.MM')} {dayData?.result === 'Z' ? '(W)' : dayData?.result === 'P' ? '(P)' : ''}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card bg-neutral-900/30 p-5 text-center">
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Aktualny Streak</p>
+            <div className="flex items-center justify-center gap-2">
+              <Zap size={16} className="text-dayA" />
+              <span className="text-2xl font-black italic text-white">{streak}</span>
+            </div>
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mt-1">Zwycięstw</p>
+          </div>
+
+          <div className="card bg-neutral-900/30 p-5 text-center">
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Tydzień Wygrany?</p>
+            <div className={`text-xl font-black italic uppercase ${weeklyWin ? 'text-dayC' : 'text-dayB'}`}>
+              {weeklyWin ? 'TAK' : 'NIE'}
+            </div>
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mt-1">{weeklyP} Porażek</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

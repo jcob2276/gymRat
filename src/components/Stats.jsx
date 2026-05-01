@@ -25,6 +25,9 @@ export default function Stats({ session }) {
   const [isExporting, setIsExporting] = useState(false);
   const [includeYazio, setIncludeYazio] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showYazioSettings, setShowYazioSettings] = useState(false);
+  const [yazioCreds, setYazioCreds] = useState({ username: '', password: '' });
+  const [hasYazioCreds, setHasYazioCreds] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -35,8 +38,14 @@ export default function Stats({ session }) {
     const { data: logs } = await supabase.from('exercise_logs').select('*, workout_sessions(created_at, workout_day, msp_passed)').eq('user_id', session.user.id).order('created_at', { ascending: true });
     const { data: body } = await supabase.from('body_metrics').select('*').eq('user_id', session.user.id).order('date', { ascending: true });
     const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).order('created_at', { ascending: false });
-    const { data: oura } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(21);
-    const { data: nutrition } = await supabase.from('daily_nutrition').select('*').order('date', { ascending: false }).limit(30);
+    const { data: oura } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(60);
+    const { data: nutrition } = await supabase.from('daily_nutrition').select('*').order('date', { ascending: false }).limit(60);
+    const { data: settings } = await supabase.from('user_settings').select('yazio_username, yazio_password').eq('user_id', session.user.id).single();
+    
+    if (settings?.yazio_username && settings?.yazio_password) {
+      setHasYazioCreds(true);
+      setYazioCreds({ username: settings.yazio_username, password: settings.yazio_password });
+    }
     
     if (logs) {
       const now = new Date();
@@ -92,6 +101,23 @@ export default function Stats({ session }) {
     }
   }
 
+  async function saveYazioCreds() {
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({ 
+        user_id: session.user.id, 
+        yazio_username: yazioCreds.username, 
+        yazio_password: yazioCreds.password 
+      });
+    
+    if (error) alert(error.message);
+    else {
+      setHasYazioCreds(true);
+      setShowYazioSettings(false);
+      alert('Dane Yazio zapisane!');
+    }
+  }
+
   async function syncHistory() {
     setIsSyncing(true);
     try {
@@ -102,7 +128,7 @@ export default function Stats({ session }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authSession.access_token}`
         },
-        body: JSON.stringify({ userId: session.user.id, sync_history: true })
+        body: JSON.stringify({ userId: session.user.id, sync_history: true, days: 60 })
       });
       const res = await response.json();
       if (res.success) {
@@ -277,7 +303,7 @@ export default function Stats({ session }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-900 text-[10px] font-bold text-white">
-              {recentSessions.slice(0, 10).map(s => (
+              {recentSessions.slice(0, 40).map(s => (
                 <tr key={s.id} className="hover:bg-neutral-900/50 transition-colors">
                   <td className="p-4">{format(parseISO(s.created_at), 'dd.MM')}</td>
                   <td className="p-4 text-center text-neutral-400">{s.workout_day}</td>
@@ -289,6 +315,49 @@ export default function Stats({ session }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xs font-black uppercase text-white flex items-center gap-2">
+            <Zap size={14} className="text-dayA" /> Konfiguracja Yazio
+          </h3>
+          <button onClick={() => setShowYazioSettings(!showYazioSettings)} className="text-[8px] font-black uppercase text-neutral-500 hover:text-white">
+            {showYazioSettings ? 'Anuluj' : hasYazioCreds ? 'Edytuj Dane' : 'Skonfiguruj'}
+          </button>
+        </div>
+
+        {(!hasYazioCreds || showYazioSettings) && (
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-1">
+              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">E-mail Yazio</label>
+              <input 
+                type="email" 
+                value={yazioCreds.username} 
+                onChange={e => setYazioCreds({...yazioCreds, username: e.target.value})}
+                placeholder="twoj@email.com"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none focus:border-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Hasło Yazio</label>
+              <input 
+                type="password" 
+                value={yazioCreds.password} 
+                onChange={e => setYazioCreds({...yazioCreds, password: e.target.value})}
+                placeholder="••••••••"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none focus:border-primary"
+              />
+            </div>
+            <button onClick={saveYazioCreds} className="w-full bg-white text-black py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-colors">
+              Zapisz Dane Logowania
+            </button>
+          </div>
+        )}
+        
+        {hasYazioCreds && !showYazioSettings && (
+          <p className="text-[10px] font-bold text-neutral-500 italic">✅ Połączono z kontem: <span className="text-white">{yazioCreds.username}</span></p>
+        )}
       </section>
 
       <section className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-4">
@@ -333,7 +402,7 @@ export default function Stats({ session }) {
               disabled={isSyncing} 
               className="bg-neutral-900 text-neutral-400 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest border border-neutral-800 hover:text-white transition-colors"
             >
-              {isSyncing ? 'Sync...' : 'Sync Yazio (30 dni)'}
+              {isSyncing ? 'Sync...' : 'Sync Yazio (60 dni)'}
             </button>
             <button 
               onClick={exportData} 
