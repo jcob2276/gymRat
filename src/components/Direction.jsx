@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle } from 'lucide-react';
+import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X } from 'lucide-react';
 import { format, subDays, startOfDay, parseISO, differenceInDays, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -13,6 +13,10 @@ export default function Direction({ session }) {
   const [newTaskForm, setNewTaskForm] = useState(
     Array(5).fill({ task: '', category: 'cialo' })
   );
+  const [habits, setHabits] = useState([]);
+  const [habitLogs, setHabitLogs] = useState([]);
+  const [isAddingHabit, setIsAddingHabit] = useState(false);
+  const [newHabit, setNewHabit] = useState({ name: '', icon: '💪', is_positive: true });
 
   useEffect(() => {
     fetchData();
@@ -50,6 +54,18 @@ export default function Direction({ session }) {
       .limit(60);
     
     setHistory(historyData || []);
+
+    // Fetch Habits & Logs
+    const { data: habitsData } = await supabase.from('habits').select('*').eq('user_id', session.user.id);
+    setHabits(habitsData || []);
+
+    const { data: logsData } = await supabase
+      .from('habit_logs')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .gte('date', subDays(new Date(), 30).toISOString().split('T')[0]);
+    setHabitLogs(logsData || []);
+
     setLoading(false);
   }
 
@@ -107,6 +123,35 @@ export default function Direction({ session }) {
       .single();
     
     if (!error) setTodayWin(data);
+  }
+
+  async function addHabit() {
+    if (!newHabit.name) return;
+    const { data, error } = await supabase.from('habits').insert({ user_id: session.user.id, ...newHabit }).select().single();
+    if (!error) {
+      setHabits([...habits, data]);
+      setNewHabit({ name: '', icon: '💪', is_positive: true });
+      setIsAddingHabit(false);
+    }
+  }
+
+  async function deleteHabit(id) {
+    if (!confirm('Usunąć nawyk?')) return;
+    await supabase.from('habits').delete().eq('id', id);
+    setHabits(habits.filter(h => h.id !== id));
+  }
+
+  async function toggleHabit(habitId) {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const existing = habitLogs.find(l => l.habit_id === habitId && l.date === today);
+
+    if (existing) {
+      const { error } = await supabase.from('habit_logs').delete().eq('id', existing.id);
+      if (!error) setHabitLogs(habitLogs.filter(l => l.id !== existing.id));
+    } else {
+      const { data, error } = await supabase.from('habit_logs').insert({ user_id: session.user.id, habit_id: habitId, date: today, completed: true }).select().single();
+      if (!error) setHabitLogs([...habitLogs, data]);
+    }
   }
 
   // Stats logic
@@ -252,6 +297,106 @@ export default function Direction({ session }) {
             })}
           </div>
         )}
+      </section>
+
+      {/* Habits Section */}
+      <section className="space-y-6">
+        <header className="flex justify-between items-center">
+          <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+            <Target size={12} /> Nawyki (Stealth Mode)
+          </h2>
+          <button onClick={() => setIsAddingHabit(true)} className="text-primary hover:scale-110 transition-transform">
+            <Plus size={18} />
+          </button>
+        </header>
+
+        {isAddingHabit && (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center">
+              <span className="text-[8px] font-black uppercase text-white">Nowy Nawyk</span>
+              <button onClick={() => setIsAddingHabit(false)}><X size={14} className="text-neutral-500" /></button>
+            </div>
+            <div className="flex gap-2">
+              <input 
+                value={newHabit.icon} 
+                onChange={e => setNewHabit({...newHabit, icon: e.target.value})}
+                className="w-10 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-center"
+              />
+              <input 
+                placeholder="Nazwa (widoczna tylko dla Ciebie)"
+                value={newHabit.name}
+                onChange={e => setNewHabit({...newHabit, name: e.target.value})}
+                className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setNewHabit({...newHabit, is_positive: true})}
+                className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${newHabit.is_positive ? 'bg-dayC text-white border-dayC' : 'border-neutral-800 text-neutral-600'}`}
+              >
+                Zrób (Dobre)
+              </button>
+              <button 
+                onClick={() => setNewHabit({...newHabit, is_positive: false})}
+                className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${!newHabit.is_positive ? 'bg-dayB text-white border-dayB' : 'border-neutral-800 text-neutral-600'}`}
+              >
+                Unikaj (Złe)
+              </button>
+            </div>
+            <button onClick={addHabit} className="w-full bg-primary text-white py-3 rounded-lg text-[10px] font-black uppercase">Dodaj Nawyk</button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-4">
+          {habits.map(h => {
+            const isDoneToday = habitLogs.some(l => l.habit_id === h.id && l.date === format(new Date(), 'yyyy-MM-dd'));
+            return (
+              <div key={h.id} className="relative group">
+                <button 
+                  onClick={() => toggleHabit(h.id)}
+                  onContextMenu={(e) => { e.preventDefault(); deleteHabit(h.id); }}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all border-2 ${isDoneToday ? (h.is_positive ? 'bg-dayC border-dayC' : 'bg-dayB border-dayB') : 'bg-neutral-900 border-neutral-800 opacity-60'}`}
+                >
+                  {h.icon}
+                </button>
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-neutral-950 px-2 py-1 rounded text-[6px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 uppercase">
+                  {h.name}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Heatmapy Nawyków */}
+        <div className="space-y-4 pt-4">
+          {habits.map(h => (
+            <div key={h.id} className="space-y-2">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[7px] font-black uppercase text-neutral-500 tracking-widest">{h.icon} {h.name}</span>
+                <span className="text-[6px] font-black uppercase text-neutral-600">30D TREND</span>
+              </div>
+              <div className="flex gap-1 overflow-x-auto pb-1">
+                {Array.from({ length: 30 }).map((_, i) => {
+                  const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd');
+                  const log = habitLogs.find(l => l.habit_id === h.id && l.date === date);
+                  
+                  let status = 'neutral';
+                  if (h.is_positive) {
+                    if (log) status = 'success';
+                    else if (date !== format(new Date(), 'yyyy-MM-dd')) status = 'fail';
+                  } else {
+                    if (log) status = 'fail'; // Odhaczone "unikaj" = porażka
+                    else if (date !== format(new Date(), 'yyyy-MM-dd')) status = 'success';
+                  }
+
+                  const color = status === 'success' ? 'bg-dayC' : status === 'fail' ? 'bg-dayB' : 'bg-neutral-900';
+                  
+                  return <div key={i} className={`w-2 h-4 rounded-[1px] ${color} flex-shrink-0`} />;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Visualization & Stats */}
