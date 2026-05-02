@@ -98,16 +98,36 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
       }]).select();
 
       const sessionId = sessionData[0].id;
+      
       const logs = exercises.flatMap(ex => 
-        ex.sets.filter(s => s.weight && s.reps).map((s, idx) => ({
-          session_id: sessionId,
-          user_id: session.user.id,
-          exercise_name: ex.name,
-          set_number: idx + 1,
-          weight: parseFloat(s.weight),
-          reps: parseInt(s.reps),
-          rpe: s.rpe ? parseFloat(s.rpe) : null
-        }))
+        ex.sets.filter(s => s.weight && s.reps).map((s, idx) => {
+          let w = parseFloat(s.weight);
+          let r = parseInt(s.reps);
+
+          // SAFEGUARD: Check for swapped weight/reps (e.g. 5kg x 85 reps)
+          // Threshold: Weight < 30 and Reps > 30 is suspicious for compound lifts
+          const compoundLifts = ['Przysiad', 'Wyciskanie', 'RDL', 'OHP', 'Martwy'];
+          const isCompound = compoundLifts.some(name => ex.name.includes(name));
+          
+          if (isCompound && w < 30 && r >= 30) {
+            const confirmSwap = window.confirm(
+              `⚠️ Podejrzany wpis w ${ex.name}: ${w}kg x ${r} powt.\n\nCzy na pewno nie zamieniłeś wagi z powtórzeniami? Kliknij OK, aby automatycznie ZAMIENIĆ te wartości.`
+            );
+            if (confirmSwap) {
+              const temp = w; w = r; r = temp;
+            }
+          }
+
+          return {
+            session_id: sessionId,
+            user_id: session.user.id,
+            exercise_name: ex.name,
+            set_number: idx + 1,
+            weight: w,
+            reps: r,
+            rpe: s.rpe ? parseFloat(s.rpe) : null
+          };
+        })
       );
 
       await supabase.from('exercise_logs').insert(logs);

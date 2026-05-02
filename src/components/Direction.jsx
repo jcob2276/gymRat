@@ -11,7 +11,7 @@ export default function Direction({ session }) {
   const [todayWin, setTodayWin] = useState(null);
   const [history, setHistory] = useState([]);
   const [newTaskForm, setNewTaskForm] = useState(
-    Array(5).fill({ task: '', category: 'cialo' })
+    Array.from({ length: 5 }, () => ({ task: '' }))
   );
   const [habits, setHabits] = useState([]);
   const [habitLogs, setHabitLogs] = useState([]);
@@ -70,12 +70,19 @@ export default function Direction({ session }) {
   }
 
   async function saveLifeGoals() {
+    // Remove ID if present to avoid conflict, rely on user_id for upsert
+    const { id, created_at, ...goalsToSave } = lifeGoals;
     const { error } = await supabase
       .from('life_goals')
-      .upsert({ user_id: session.user.id, ...lifeGoals }, { onConflict: 'user_id' });
+      .upsert({ user_id: session.user.id, ...goalsToSave }, { onConflict: 'user_id' });
     
-    if (!error) setIsEditingGoals(false);
-    else alert('Błąd zapisu celów');
+    if (!error) {
+      setIsEditingGoals(false);
+      fetchData();
+    } else {
+      console.error(error);
+      alert('Błąd zapisu celów: ' + error.message);
+    }
   }
 
   async function startNewDay() {
@@ -88,11 +95,11 @@ export default function Direction({ session }) {
     const entry = {
       user_id: session.user.id,
       date: today,
-      task_1: newTaskForm[0].task, category_1: newTaskForm[0].category,
-      task_2: newTaskForm[1].task, category_2: newTaskForm[1].category,
-      task_3: newTaskForm[2].task, category_3: newTaskForm[2].category,
-      task_4: newTaskForm[3].task, category_4: newTaskForm[3].category,
-      task_5: newTaskForm[4].task, category_5: newTaskForm[4].category,
+      task_1: newTaskForm[0].task,
+      task_2: newTaskForm[1].task,
+      task_3: newTaskForm[2].task,
+      task_4: newTaskForm[3].task,
+      task_5: newTaskForm[4].task,
     };
 
     const { data, error } = await supabase.from('daily_wins').insert(entry).select().single();
@@ -200,30 +207,55 @@ export default function Direction({ session }) {
           </button>
         </div>
 
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {[
-            { key: 'goal_cialo', label: 'Ciało', icon: <Shield size={14} className="text-dayC" /> },
-            { key: 'goal_duch', label: 'Duch', icon: <Zap size={14} className="text-dayA" /> },
-            { key: 'goal_konto', label: 'Konto', icon: <Wallet size={14} className="text-dayD" /> },
-          ].map((g) => (
-            <div key={g.key} className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 flex items-center gap-4">
-              <div className="w-8 h-8 rounded-full bg-neutral-950 flex items-center justify-center border border-neutral-800">
-                {g.icon}
+            { key: 'goal_cialo', dateKey: 'date_cialo', label: 'Ciało', icon: <Shield size={14} className="text-dayC" /> },
+            { key: 'goal_duch', dateKey: 'date_duch', label: 'Duch', icon: <Zap size={14} className="text-dayA" /> },
+            { key: 'goal_konto', dateKey: 'date_konto', label: 'Konto', icon: <Wallet size={14} className="text-dayD" /> },
+          ].map((g) => {
+            const daysLeft = lifeGoals[g.dateKey] ? differenceInDays(parseISO(lifeGoals[g.dateKey]), new Date()) : null;
+            
+            return (
+              <div key={g.key} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-3 relative overflow-hidden">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-neutral-950 flex items-center justify-center border border-neutral-800">
+                      {g.icon}
+                    </div>
+                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">{g.label}</p>
+                  </div>
+                  {daysLeft !== null && (
+                    <div className="bg-neutral-950 px-2 py-1 rounded border border-neutral-800">
+                      <p className="text-[8px] font-black text-primary uppercase">Zostało {daysLeft} dni</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-h-[40px]">
+                  {isEditingGoals ? (
+                    <div className="space-y-2">
+                      <textarea 
+                        value={lifeGoals[g.key]} 
+                        onChange={(e) => setLifeGoals({...lifeGoals, [g.key]: e.target.value})}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-[12px] font-bold text-white outline-none focus:border-primary resize-none"
+                        rows={2}
+                      />
+                      <input 
+                        type="date"
+                        value={lifeGoals[g.dateKey] || ''}
+                        onChange={(e) => setLifeGoals({...lifeGoals, [g.dateKey]: e.target.value})}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-[14px] font-black text-white uppercase italic leading-tight break-words">
+                      {lifeGoals[g.key] || 'Brak zdefiniowanego celu'}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">{g.label}</p>
-                {isEditingGoals ? (
-                  <input 
-                    value={lifeGoals[g.key]} 
-                    onChange={(e) => setLifeGoals({...lifeGoals, [g.key]: e.target.value})}
-                    className="w-full bg-transparent border-b border-primary/30 outline-none text-[10px] font-bold text-white pt-1"
-                  />
-                ) : (
-                  <p className="text-[10px] font-bold text-white uppercase italic">{lifeGoals[g.key] || '---'}</p>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -243,27 +275,15 @@ export default function Direction({ session }) {
             <h3 className="text-[10px] font-black text-white uppercase tracking-widest text-center">Zdefiniuj 5 Zwycięstw na Dziś</h3>
             <div className="space-y-3">
               {newTaskForm.map((t, i) => (
-                <div key={i} className="flex gap-2">
-                  <select 
-                    value={t.category} 
-                    onChange={(e) => {
-                      const n = [...newTaskForm]; n[i].category = e.target.value; setNewTaskForm(n);
-                    }}
-                    className="bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[8px] font-black uppercase outline-none focus:border-primary text-neutral-400"
-                  >
-                    <option value="cialo">Ciało</option>
-                    <option value="duch">Duch</option>
-                    <option value="konto">Konto</option>
-                  </select>
-                  <input 
-                    placeholder={`Zadanie ${i+1}`}
-                    value={t.task}
-                    onChange={(e) => {
-                      const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
-                    }}
-                    className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
-                  />
-                </div>
+                <input 
+                  key={i}
+                  placeholder={`Zadanie ${i+1}`}
+                  value={t.task}
+                  onChange={(e) => {
+                    const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[12px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
+                />
               ))}
             </div>
             <button onClick={startNewDay} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20">Zatwierdź Listę</button>
@@ -288,8 +308,7 @@ export default function Direction({ session }) {
                       {done ? <CheckSquare size={16} /> : <Target size={16} />}
                     </div>
                     <div className="text-left">
-                      <p className={`text-[8px] font-black uppercase tracking-widest opacity-60`}>{category}</p>
-                      <p className={`text-xs font-black uppercase italic ${done ? 'line-through' : 'text-white'}`}>{task}</p>
+                      <p className={`text-xs font-black uppercase italic ${done ? 'line-through text-neutral-600' : 'text-white'}`}>{task}</p>
                     </div>
                   </div>
                 </button>
@@ -303,99 +322,98 @@ export default function Direction({ session }) {
       <section className="space-y-6">
         <header className="flex justify-between items-center">
           <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
-            <Target size={12} /> Nawyki (Stealth Mode)
+            <Target size={12} /> Twoje Nawyki
           </h2>
-          <button onClick={() => setIsAddingHabit(true)} className="text-primary hover:scale-110 transition-transform">
-            <Plus size={18} />
+          <button onClick={() => setIsAddingHabit(true)} className="flex items-center gap-1 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800 text-[10px] font-black uppercase text-primary hover:bg-primary hover:text-white transition-all">
+            <Plus size={12} /> Dodaj
           </button>
         </header>
 
         {isAddingHabit && (
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex justify-between items-center">
-              <span className="text-[8px] font-black uppercase text-white">Nowy Nawyk</span>
-              <button onClick={() => setIsAddingHabit(false)}><X size={14} className="text-neutral-500" /></button>
+          <div className="bg-neutral-900 border-2 border-primary rounded-2xl p-6 space-y-4 animate-in fade-in slide-in-from-top-2">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] font-black uppercase text-white">Nowy Nawyk</span>
+              <button onClick={() => setIsAddingHabit(false)} className="text-neutral-500"><X size={16} /></button>
             </div>
-            <div className="flex gap-2">
-              <input 
-                value={newHabit.icon} 
-                onChange={e => setNewHabit({...newHabit, icon: e.target.value})}
-                className="w-10 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-center"
-              />
-              <input 
-                placeholder="Nazwa (widoczna tylko dla Ciebie)"
-                value={newHabit.name}
-                onChange={e => setNewHabit({...newHabit, name: e.target.value})}
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
-              />
+            <div className="grid gap-4">
+              <div className="flex gap-3">
+                <input 
+                  value={newHabit.icon} 
+                  onChange={e => setNewHabit({...newHabit, icon: e.target.value})}
+                  className="w-12 h-12 bg-neutral-950 border border-neutral-800 rounded-xl text-center text-xl"
+                  placeholder="🔥"
+                />
+                <input 
+                  placeholder="Nazwa nawyku..."
+                  value={newHabit.name}
+                  onChange={e => setNewHabit({...newHabit, name: e.target.value})}
+                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[12px] font-bold text-white outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setNewHabit({...newHabit, is_positive: true})}
+                  className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${newHabit.is_positive ? 'bg-dayC/10 border-dayC text-dayC' : 'bg-neutral-950 border-neutral-800 text-neutral-600'}`}
+                >
+                  Zrób (Dobre)
+                </button>
+                <button 
+                  onClick={() => setNewHabit({...newHabit, is_positive: false})}
+                  className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${!newHabit.is_positive ? 'bg-dayB/10 border-dayB text-dayB' : 'bg-neutral-950 border-neutral-800 text-neutral-600'}`}
+                >
+                  Unikaj (Złe)
+                </button>
+              </div>
+              <button onClick={addHabit} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20">Dodaj do listy</button>
             </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setNewHabit({...newHabit, is_positive: true})}
-                className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${newHabit.is_positive ? 'bg-dayC text-white border-dayC' : 'border-neutral-800 text-neutral-600'}`}
-              >
-                Zrób (Dobre)
-              </button>
-              <button 
-                onClick={() => setNewHabit({...newHabit, is_positive: false})}
-                className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${!newHabit.is_positive ? 'bg-dayB text-white border-dayB' : 'border-neutral-800 text-neutral-600'}`}
-              >
-                Unikaj (Złe)
-              </button>
-            </div>
-            <button onClick={addHabit} className="w-full bg-primary text-white py-3 rounded-lg text-[10px] font-black uppercase">Dodaj Nawyk</button>
           </div>
         )}
 
-        <div className="flex flex-wrap gap-4">
+        <div className="grid gap-3">
           {habits.map(h => {
             const isDoneToday = habitLogs.some(l => l.habit_id === h.id && l.date === format(new Date(), 'yyyy-MM-dd'));
+            const logsLast30 = Array.from({ length: 30 }).map((_, i) => {
+              const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd');
+              const log = habitLogs.find(l => l.habit_id === h.id && l.date === date);
+              if (h.is_positive) return log ? 'S' : (date === format(new Date(), 'yyyy-MM-dd') ? 'N' : 'F');
+              return log ? 'F' : 'S';
+            });
+
             return (
-              <div key={h.id} className="relative group">
-                <button 
-                  onClick={() => toggleHabit(h.id)}
-                  onContextMenu={(e) => { e.preventDefault(); deleteHabit(h.id); }}
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all border-2 ${isDoneToday ? (h.is_positive ? 'bg-dayC border-dayC' : 'bg-dayB border-dayB') : 'bg-neutral-900 border-neutral-800 opacity-60'}`}
-                >
-                  {h.icon}
-                </button>
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-neutral-950 px-2 py-1 rounded text-[6px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 uppercase">
-                  {h.name}
+              <div key={h.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">{h.icon}</div>
+                    <div>
+                      <p className="text-[12px] font-black uppercase text-white leading-none">{h.name}</p>
+                      <p className="text-[8px] font-bold text-neutral-500 uppercase tracking-widest mt-1">{h.is_positive ? 'Cel: Wykonać' : 'Cel: Unikać'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => toggleHabit(h.id)}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border-2 ${isDoneToday ? (h.is_positive ? 'bg-dayC border-dayC text-white' : 'bg-dayB border-dayB text-white') : 'bg-neutral-950 border-neutral-800 text-neutral-700'}`}
+                    >
+                      {isDoneToday ? <CheckSquare size={20} /> : <Square size={20} />}
+                    </button>
+                    <button onClick={() => deleteHabit(h.id)} className="p-2 text-neutral-800 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Heatmap Bar */}
+                <div className="flex gap-1 overflow-hidden h-3">
+                  {logsLast30.map((status, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`flex-1 rounded-sm ${status === 'S' ? 'bg-dayC' : status === 'F' ? 'bg-dayB' : 'bg-neutral-950 border border-neutral-800'}`}
+                    />
+                  ))}
                 </div>
               </div>
             );
           })}
-        </div>
-
-        {/* Heatmapy Nawyków */}
-        <div className="space-y-4 pt-4">
-          {habits.map(h => (
-            <div key={h.id} className="space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[7px] font-black uppercase text-neutral-500 tracking-widest">{h.icon} {h.name}</span>
-                <span className="text-[6px] font-black uppercase text-neutral-600">30D TREND</span>
-              </div>
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                {Array.from({ length: 30 }).map((_, i) => {
-                  const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd');
-                  const log = habitLogs.find(l => l.habit_id === h.id && l.date === date);
-                  
-                  let status = 'neutral';
-                  if (h.is_positive) {
-                    if (log) status = 'success';
-                    else if (date !== format(new Date(), 'yyyy-MM-dd')) status = 'fail';
-                  } else {
-                    if (log) status = 'fail'; // Odhaczone "unikaj" = porażka
-                    else if (date !== format(new Date(), 'yyyy-MM-dd')) status = 'success';
-                  }
-
-                  const color = status === 'success' ? 'bg-dayC' : status === 'fail' ? 'bg-dayB' : 'bg-neutral-900';
-                  
-                  return <div key={i} className={`w-2 h-4 rounded-[1px] ${color} flex-shrink-0`} />;
-                })}
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 

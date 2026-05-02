@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { Trophy, Clock, Trash2, FileText, ChevronDown, ChevronUp, Scale, Ruler, Activity, Zap, TrendingUp, Target, Battery } from 'lucide-react';
+import { Trophy, Clock, Trash2, FileText, ChevronDown, ChevronUp, Scale, Ruler, Activity, Zap, TrendingUp, Target, Battery, CheckSquare } from 'lucide-react';
 import { format, differenceInDays, parseISO, startOfWeek, addWeeks } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -18,16 +18,15 @@ export default function Stats({ session }) {
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
   const [correlation, setCorrelation] = useState(null);
-  const [exportRange, setExportRange] = useState({ 
-    start: format(addWeeks(new Date(), -4), 'yyyy-MM-dd'), 
-    end: format(new Date(), 'yyyy-MM-dd') 
+  const [dateRange, setDateRange] = useState({ 
+    from: format(addWeeks(new Date(), -4), 'yyyy-MM-dd'), 
+    to: format(new Date(), 'yyyy-MM-dd') 
   });
   const [isExporting, setIsExporting] = useState(false);
   const [includeYazio, setIncludeYazio] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showYazioSettings, setShowYazioSettings] = useState(false);
-  const [yazioCreds, setYazioCreds] = useState({ username: '', password: '' });
-  const [hasYazioCreds, setHasYazioCreds] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
+  const [editForm, setEditForm] = useState({ date: '', logs: [] });
 
   useEffect(() => {
     fetchStats();
@@ -37,15 +36,9 @@ export default function Stats({ session }) {
     setLoading(true);
     const { data: logs } = await supabase.from('exercise_logs').select('*, workout_sessions(created_at, workout_day, msp_passed)').eq('user_id', session.user.id).order('created_at', { ascending: true });
     const { data: body } = await supabase.from('body_metrics').select('*').eq('user_id', session.user.id).order('date', { ascending: true });
-    const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).order('date', { ascending: false });
     const { data: oura } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).order('date', { ascending: false }).limit(60);
     const { data: nutrition } = await supabase.from('daily_nutrition').select('*').order('date', { ascending: false }).limit(60);
-    const { data: settings } = await supabase.from('user_settings').select('yazio_username, yazio_password').eq('user_id', session.user.id).single();
-    
-    if (settings?.yazio_username && settings?.yazio_password) {
-      setHasYazioCreds(true);
-      setYazioCreds({ username: settings.yazio_username, password: settings.yazio_password });
-    }
     
     if (logs) {
       const now = new Date();
@@ -100,24 +93,6 @@ export default function Stats({ session }) {
       fetchStats();
     }
   }
-
-  async function saveYazioCreds() {
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({ 
-        user_id: session.user.id, 
-        yazio_username: yazioCreds.username, 
-        yazio_password: yazioCreds.password 
-      });
-    
-    if (error) alert(error.message);
-    else {
-      setHasYazioCreds(true);
-      setShowYazioSettings(false);
-      alert('Dane Yazio zapisane!');
-    }
-  }
-
   async function syncHistory() {
     setIsSyncing(true);
     try {
@@ -128,7 +103,7 @@ export default function Stats({ session }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authSession.access_token}`
         },
-        body: JSON.stringify({ userId: session.user.id, sync_history: true, days: 60 })
+        body: JSON.stringify({ userId: session.user.id, sync_history: true, days: 25 })
       });
       const res = await response.json();
       if (res.success) {
@@ -143,71 +118,104 @@ export default function Stats({ session }) {
       setIsSyncing(false);
     }
   }
+  async function startEditing(session) {
+    setEditingSession(session.id);
+    setEditForm({
+      date: session.date,
+      logs: [...session.exercise_logs]
+    });
+  }
+
+  async function updateSession() {
+    try {
+      // 1. Update session date
+      await supabase.from('workout_sessions').update({ date: editForm.date }).eq('id', editingSession);
+      
+      // 2. Update all logs
+      for (const log of editForm.logs) {
+        await supabase.from('exercise_logs').update({ 
+          weight: parseFloat(log.weight), 
+          reps: parseInt(log.reps) 
+        }).eq('id', log.id);
+      }
+      
+      alert('Trening zaktualizowany!');
+      setEditingSession(null);
+      fetchStats();
+    } catch (err) {
+      alert('Błąd podczas aktualizacji');
+    }
+  }
+
+  async function deleteLog(id) {
+    if (confirm('Usunąć tę serię?')) {
+      await supabase.from('exercise_logs').delete().eq('id', id);
+      setEditForm({ ...editForm, logs: editForm.logs.filter(l => l.id !== id) });
+    }
+  }
 
   async function exportData() {
     setIsExporting(true);
     try {
-      const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).gte('date', exportRange.start).lte('date', exportRange.end).order('date', { ascending: true });
+      const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to).order('date', { ascending: true });
       
-      let foodData = [];
+      let foodEntries = [];
       if (includeYazio) {
-        const { data } = await supabase.from('daily_food_entries').select('*').eq('user_id', session.user.id).gte('date', exportRange.start).lte('date', exportRange.end).order('date', { ascending: true });
-        foodData = data || [];
+        const { data: food } = await supabase.from('daily_food_entries').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to).order('date', { ascending: true });
+        foodEntries = food || [];
       }
 
-      let text = `# RAPORT TRENINGOWY KUBA\n`;
-      text += `Okres: ${exportRange.start} do ${exportRange.end}\n\n`;
+      let md = `# RAPORT TRENINGOWY KUBA\n`;
+      md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
 
-      // Group by date
       const dates = [...new Set([
         ...sessions.map(s => s.date),
-        ...foodData.map(f => f.date)
+        ...foodEntries.map(f => f.date)
       ])].sort();
 
       dates.forEach(dateStr => {
         const daySessions = sessions.filter(s => s.date === dateStr);
-        const dayFood = foodData.filter(f => f.date === dateStr);
-        
-        if (daySessions.length === 0 && dayFood.length === 0) return;
+        if (daySessions.length === 0 && (!includeYazio || foodEntries.filter(f => f.date === dateStr).length === 0)) return;
 
-        text += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n\n`;
+        md += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n\n`;
 
-        if (daySessions.length > 0) {
-          daySessions.forEach(s => {
-            text += `### 🏋️ Trening: Dzień ${s.workout_day}\n`;
-            s.exercise_logs.forEach(l => { 
-              text += `- **${l.exercise_name}**: ${l.weight}kg x ${l.reps} ${l.is_pws_or_msp ? '🔥' : ''}\n`; 
+        daySessions.forEach(s => {
+          md += `### 🏋️ Trening: Dzień ${s.workout_day}\n`;
+          s.exercise_logs.forEach(l => { 
+            md += `- **${l.exercise_name}**: ${l.weight}kg x ${l.reps} ${l.is_pws_or_msp ? '🔥' : ''}\n`; 
+          });
+          md += `\n`;
+        });
+
+        if (includeYazio) {
+          const dayFood = foodEntries.filter(f => f.date === dateStr);
+          if (dayFood.length > 0) {
+            md += `### 🥗 Dieta (Yazio)\n`;
+            const meals = { breakfast: 'Śniadanie', lunch: 'Obiad', dinner: 'Kolacja', snack: 'Przekąski' };
+            
+            Object.entries(meals).forEach(([key, label]) => {
+              const mealItems = dayFood.filter(f => f.meal_type === key);
+              if (mealItems.length > 0) {
+                md += `#### ${label}\n`;
+                mealItems.forEach(item => {
+                  md += `- ${item.name} (${item.amount || ''}): ${item.calories} kcal | B: ${item.protein}g | W: ${item.carbs || 0}g | T: ${item.fat || 0}g\n`;
+                });
+              }
             });
-            text += `\n`;
-          });
+            
+            const totalCal = dayFood.reduce((sum, f) => sum + (f.calories || 0), 0);
+            const totalProt = dayFood.reduce((sum, f) => sum + (Number(f.protein) || 0), 0);
+            const totalCarb = dayFood.reduce((sum, f) => sum + (Number(f.carbs) || 0), 0);
+            const totalFat = dayFood.reduce((sum, f) => sum + (Number(f.fat) || 0), 0);
+            md += `\n**Suma dnia: ${totalCal} kcal | B: ${totalProt.toFixed(1)}g | W: ${totalCarb.toFixed(1)}g | T: ${totalFat.toFixed(1)}g**\n`;
+          }
         }
-
-        if (dayFood.length > 0) {
-          text += `### 🥗 Dieta (Yazio)\n`;
-          const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
-          const sortedFood = [...dayFood].sort((a, b) => mealOrder.indexOf(a.meal_type) - mealOrder.indexOf(b.meal_type));
-          
-          let lastMeal = '';
-          sortedFood.forEach(f => {
-            if (f.meal_type !== lastMeal) {
-              const mealNames = { breakfast: 'Śniadanie', lunch: 'Obiad', dinner: 'Kolacja', snack: 'Przekąski' };
-              text += `#### ${mealNames[f.meal_type] || f.meal_type}\n`;
-              lastMeal = f.meal_type;
-            }
-            text += `- ${f.name} (${f.amount}): **${f.calories} kcal**, ${f.protein}g B\n`;
-          });
-
-          const dayTotalCal = dayFood.reduce((acc, f) => acc + (f.calories || 0), 0);
-          const dayTotalProt = dayFood.reduce((acc, f) => acc + (f.protein || 0), 0);
-          text += `\n**SUMA DNIA: ${dayTotalCal} kcal | ${dayTotalProt.toFixed(1)}g Białka**\n\n`;
-        }
-
-        text += `---\n\n`;
+        md += `---\n\n`;
       });
 
-      const blob = new Blob([text], { type: 'text/markdown' });
+      const blob = new Blob([md], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `raport_kuba_${exportRange.start}.md`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `raport_kuba_${dateRange.from}.md`; a.click();
     } finally { setIsExporting(false); }
   }
   
@@ -305,10 +313,47 @@ export default function Stats({ session }) {
             <tbody className="divide-y divide-neutral-900 text-[10px] font-bold text-white">
               {recentSessions.slice(0, 40).map(s => (
                 <tr key={s.id} className="hover:bg-neutral-900/50 transition-colors">
-                  <td className="p-4">{format(parseISO(s.created_at), 'dd.MM')}</td>
-                  <td className="p-4 text-center text-neutral-400">{s.workout_day}</td>
+                  <td className="p-4">
+                    {editingSession === s.id ? (
+                      <input type="date" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded p-1 text-[10px] text-white" />
+                    ) : (
+                      format(parseISO(s.date), 'dd.MM')
+                    )}
+                  </td>
+                  <td className="p-4 text-center text-neutral-400">
+                    {editingSession === s.id ? (
+                      <div className="space-y-2 text-left">
+                        {editForm.logs.map((log, idx) => (
+                          <div key={log.id} className="flex items-center gap-2 bg-neutral-950 p-2 rounded border border-neutral-800">
+                            <span className="text-[8px] w-12 truncate">{log.exercise_name}</span>
+                            <input type="number" step="0.5" value={log.weight} onChange={e => {
+                              const newLogs = [...editForm.logs];
+                              newLogs[idx].weight = e.target.value;
+                              setEditForm({...editForm, logs: newLogs});
+                            }} className="w-12 bg-neutral-900 border border-neutral-800 rounded p-1 text-[10px]" />
+                            <span className="text-[8px]">kg x</span>
+                            <input type="number" value={log.reps} onChange={e => {
+                              const newLogs = [...editForm.logs];
+                              newLogs[idx].reps = e.target.value;
+                              setEditForm({...editForm, logs: newLogs});
+                            }} className="w-10 bg-neutral-900 border border-neutral-800 rounded p-1 text-[10px]" />
+                            <button onClick={() => deleteLog(log.id)} className="text-red-900 hover:text-red-500 ml-auto"><Trash2 size={10} /></button>
+                          </div>
+                        ))}
+                        <button onClick={updateSession} className="w-full bg-primary text-white py-2 rounded text-[8px] font-black uppercase">Zapisz Zmiany</button>
+                        <button onClick={() => setEditingSession(null)} className="w-full text-neutral-500 py-1 text-[8px] font-black uppercase">Anuluj</button>
+                      </div>
+                    ) : (
+                      s.workout_day
+                    )}
+                  </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => deleteSession(s.id)} className="text-neutral-700 hover:text-red-500 p-2"><Trash2 size={12} /></button>
+                    {editingSession !== s.id && (
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => startEditing(s)} className="text-neutral-700 hover:text-primary p-2"><Zap size={12} /></button>
+                        <button onClick={() => deleteSession(s.id)} className="text-neutral-700 hover:text-red-500 p-2"><Trash2 size={12} /></button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -317,101 +362,34 @@ export default function Stats({ session }) {
         </div>
       </section>
 
-      <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xs font-black uppercase text-white flex items-center gap-2">
-            <Zap size={14} className="text-dayA" /> Konfiguracja Yazio
-          </h3>
-          <button onClick={() => setShowYazioSettings(!showYazioSettings)} className="text-[8px] font-black uppercase text-neutral-500 hover:text-white">
-            {showYazioSettings ? 'Anuluj' : hasYazioCreds ? 'Edytuj Dane' : 'Skonfiguruj'}
-          </button>
-        </div>
-
-        {(!hasYazioCreds || showYazioSettings) && (
-          <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-1">
-              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">E-mail Yazio</label>
-              <input 
-                type="email" 
-                value={yazioCreds.username} 
-                onChange={e => setYazioCreds({...yazioCreds, username: e.target.value})}
-                placeholder="twoj@email.com"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none focus:border-primary"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Hasło Yazio</label>
-              <input 
-                type="password" 
-                value={yazioCreds.password} 
-                onChange={e => setYazioCreds({...yazioCreds, password: e.target.value})}
-                placeholder="••••••••"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none focus:border-primary"
-              />
-            </div>
-            <button onClick={saveYazioCreds} className="w-full bg-white text-black py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-colors">
-              Zapisz Dane Logowania
-            </button>
-          </div>
-        )}
-        
-        {hasYazioCreds && !showYazioSettings && (
-          <p className="text-[10px] font-bold text-neutral-500 italic">✅ Połączono z kontem: <span className="text-white">{yazioCreds.username}</span></p>
-        )}
-      </section>
-
       <section className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-4">
         <h3 className="text-xs font-black uppercase text-primary">Eksportuj Raport</h3>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Od:</label>
-            <input 
-              type="date" 
-              value={exportRange.start} 
-              onChange={e => setExportRange({...exportRange, start: e.target.value})}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
-            />
+            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Od</label>
+            <input type="date" value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none" />
           </div>
           <div className="space-y-1">
-            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Do:</label>
-            <input 
-              type="date" 
-              value={exportRange.end} 
-              onChange={e => setExportRange({...exportRange, end: e.target.value})}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-[10px] font-bold text-white outline-none"
-            />
+            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Do</label>
+            <input type="date" value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none" />
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 pt-2">
-          <div className="flex items-center gap-3 px-1">
-            <input 
-              type="checkbox" 
-              id="includeYazio" 
-              checked={includeYazio} 
-              onChange={(e) => setIncludeYazio(e.target.checked)}
-              className="w-4 h-4 accent-primary"
-            />
-            <label htmlFor="includeYazio" className="text-[10px] font-bold text-neutral-400 uppercase cursor-pointer">Dołącz dane z Yazio</label>
+        <button onClick={() => setIncludeYazio(!includeYazio)} className="flex items-center gap-2 text-neutral-500 hover:text-white transition-colors">
+          <div className={`w-4 h-4 rounded border flex items-center justify-center ${includeYazio ? 'bg-primary border-primary text-white' : 'border-neutral-800'}`}>
+            {includeYazio && <CheckSquare size={10} />}
           </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={syncHistory} 
-              disabled={isSyncing} 
-              className="bg-neutral-900 text-neutral-400 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest border border-neutral-800 hover:text-white transition-colors"
-            >
-              {isSyncing ? 'Sync...' : 'Sync Yazio (60 dni)'}
-            </button>
-            <button 
-              onClick={exportData} 
-              disabled={isExporting} 
-              className="bg-primary text-white py-3 rounded-xl text-[8px] font-black uppercase tracking-widest"
-            >
-              {isExporting ? 'Generowanie...' : 'Pobierz .md'}
-            </button>
-          </div>
+          <span className="text-[10px] font-black uppercase">Dołącz dietę z Yazio</span>
+        </button>
+
+        <div className="flex justify-between items-center pt-2">
+          <button onClick={syncHistory} disabled={isSyncing} className="text-[8px] font-black uppercase text-neutral-600 hover:text-primary transition-colors">
+            {isSyncing ? 'Syncing...' : 'Wymuś Sync Yazio (30 dni)'}
+          </button>
+          <button onClick={exportData} disabled={isExporting} className="bg-primary text-white px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20 flex-1 ml-4">
+            {isExporting ? 'Generowanie...' : 'Pobierz Raport (.md)'}
+          </button>
         </div>
       </section>
     </div>
