@@ -7,7 +7,6 @@ import { WORKOUT_PLAN } from '../data/workoutPlan';
 
 export default function WorkoutExecution({ session, dayKey, onBack }) {
   const plan = WORKOUT_PLAN[dayKey];
-  const [startTime] = useState(new Date());
   const [exercises, setExercises] = useState([]);
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0);
   const [restTimer, setRestTimer] = useState(null);
@@ -15,6 +14,7 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
   const [sessionNotes, setSessionNotes] = useState('');
   const [mspFeedback, setMspFeedback] = useState(null);
   const [previousData, setPreviousData] = useState({});
+  const [startTime, setStartTime] = useState(new Date());
 
   useEffect(() => {
     fetchPreviousData();
@@ -39,7 +39,17 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
       }
       setPreviousData(prevMap);
 
-      if (plan?.exercises) {
+      // Check for local draft
+      const draftKey = `workout_draft_${dayKey}`;
+      const savedDraft = localStorage.getItem(draftKey);
+      
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        setExercises(draft.exercises);
+        setActiveExerciseIdx(draft.activeExerciseIdx || 0);
+        setSessionNotes(draft.sessionNotes || '');
+        if (draft.startTime) setStartTime(new Date(draft.startTime));
+      } else if (plan?.exercises) {
         const initialExercises = plan.exercises.map(ex => ({
           ...ex,
           sets: Array.from({ length: ex.sets }, () => ({ weight: '', reps: '', rpe: '' }))
@@ -51,6 +61,19 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
     }
   }
 
+  // Consolidated auto-save effect
+  useEffect(() => {
+    if (exercises.length > 0) {
+      const draft = {
+        exercises,
+        activeExerciseIdx,
+        sessionNotes,
+        startTime: startTime.toISOString()
+      };
+      localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify(draft));
+    }
+  }, [exercises, activeExerciseIdx, sessionNotes, startTime, dayKey]);
+
   function updateSet(exIdx, setIdx, field, value) {
     setExercises(prev => {
       const updated = [...prev];
@@ -61,9 +84,6 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
       sets[setIdx] = { ...sets[setIdx], [field]: value };
       exercise.sets = sets;
       updated[exIdx] = exercise;
-      
-      // Auto-save draft
-      localStorage.setItem(`workout_draft_${dayKey}`, JSON.stringify(updated));
       
       // Auto-timer
       if (field === 'reps' && value !== '' && sets[setIdx].weight !== '') {
