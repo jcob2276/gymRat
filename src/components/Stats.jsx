@@ -24,6 +24,7 @@ export default function Stats({ session }) {
   });
   const [isExporting, setIsExporting] = useState(false);
   const [includeYazio, setIncludeYazio] = useState(true);
+  const [includeJournal, setIncludeJournal] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [editForm, setEditForm] = useState({ date: '', logs: [] });
@@ -165,17 +166,27 @@ export default function Stats({ session }) {
         foodEntries = food || [];
       }
 
+      let journalEntries = [];
+      if (includeJournal) {
+        const { data: journal } = await supabase.from('daily_wins').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to).order('date', { ascending: true });
+        journalEntries = journal || [];
+      }
+
       let md = `# RAPORT TRENINGOWY KUBA\n`;
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
 
       const dates = [...new Set([
         ...sessions.map(s => s.date),
-        ...foodEntries.map(f => f.date)
+        ...foodEntries.map(f => f.date),
+        ...journalEntries.map(j => j.date)
       ])].sort();
 
       dates.forEach(dateStr => {
         const daySessions = sessions.filter(s => s.date === dateStr);
-        if (daySessions.length === 0 && (!includeYazio || foodEntries.filter(f => f.date === dateStr).length === 0)) return;
+        const dayFood = foodEntries.filter(f => f.date === dateStr);
+        const dayJournal = journalEntries.find(j => j.date === dateStr);
+
+        if (daySessions.length === 0 && dayFood.length === 0 && !dayJournal) return;
 
         md += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n\n`;
 
@@ -210,6 +221,21 @@ export default function Stats({ session }) {
             md += `\n**Suma dnia: ${totalCal} kcal | B: ${totalProt.toFixed(1)}g | W: ${totalCarb.toFixed(1)}g | T: ${totalFat.toFixed(1)}g**\n`;
           }
         }
+        if (includeJournal && dayJournal) {
+          md += `### 📓 Notatnik & Refleksja\n`;
+          if (dayJournal.mood_score) {
+            const moods = ['Źle', 'Słabo', 'Ok', 'Dobrze', 'Świetnie'];
+            md += `**Nastrój:** ${moods[dayJournal.mood_score - 1] || 'Nieokreślony'}\n`;
+          }
+          if (dayJournal.gratitude_entry) {
+            md += `**Wdzięczność:** ${dayJournal.gratitude_entry}\n`;
+          }
+          if (dayJournal.journal_entry) {
+            md += `**Notatki:** ${dayJournal.journal_entry}\n`;
+          }
+          md += `\n`;
+        }
+
         md += `---\n\n`;
       });
 
@@ -376,12 +402,21 @@ export default function Stats({ session }) {
           </div>
         </div>
 
-        <button onClick={() => setIncludeYazio(!includeYazio)} className="flex items-center gap-2 text-neutral-500 hover:text-white transition-colors">
-          <div className={`w-4 h-4 rounded border flex items-center justify-center ${includeYazio ? 'bg-primary border-primary text-white' : 'border-neutral-800'}`}>
-            {includeYazio && <CheckSquare size={10} />}
-          </div>
-          <span className="text-[10px] font-black uppercase">Dołącz dietę z Yazio</span>
-        </button>
+        <div className="flex gap-4">
+          <button onClick={() => setIncludeYazio(!includeYazio)} className="flex items-center gap-2 text-neutral-500 hover:text-white transition-colors">
+            <div className={`w-4 h-4 rounded border flex items-center justify-center ${includeYazio ? 'bg-primary border-primary text-white' : 'border-neutral-800'}`}>
+              {includeYazio && <CheckSquare size={10} />}
+            </div>
+            <span className="text-[10px] font-black uppercase">Dieta (Yazio)</span>
+          </button>
+
+          <button onClick={() => setIncludeJournal(!includeJournal)} className="flex items-center gap-2 text-neutral-500 hover:text-white transition-colors">
+            <div className={`w-4 h-4 rounded border flex items-center justify-center ${includeJournal ? 'bg-primary border-primary text-white' : 'border-neutral-800'}`}>
+              {includeJournal && <CheckSquare size={10} />}
+            </div>
+            <span className="text-[10px] font-black uppercase">Notatnik (Journal)</span>
+          </button>
+        </div>
 
         <div className="flex justify-between items-center pt-2">
           <button onClick={syncHistory} disabled={isSyncing} className="text-[8px] font-black uppercase text-neutral-600 hover:text-primary transition-colors">
