@@ -7,7 +7,7 @@ import Stats from './Stats';
 import Photos from './Photos';
 import Direction from './Direction';
 import OuraWidget from './OuraWidget';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfWeek } from 'date-fns';
 
 export default function Dashboard({ session }) {
   const [view, setView] = useState('workout');
@@ -15,6 +15,8 @@ export default function Dashboard({ session }) {
   const [mspFeedbackMap, setMspFeedbackMap] = useState({});
   const [lastDayASession, setLastDayASession] = useState(null);
   const [showProgression, setShowProgression] = useState(false);
+  const [weeklyCalories, setWeeklyCalories] = useState(0);
+  const weeklyBudget = 12600; // 1800 * 7
 
   useEffect(() => {
     fetchDashboardData();
@@ -36,6 +38,18 @@ export default function Dashboard({ session }) {
         }
       });
       setMspFeedbackMap(feedbackMap);
+
+      // Fetch Weekly Calories (reset on Monday)
+      const monday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const { data: nutrition } = await supabase
+        .from('daily_nutrition')
+        .select('calories')
+        .gte('date', monday);
+      
+      if (nutrition) {
+        const total = nutrition.reduce((sum, n) => sum + (n.calories || 0), 0);
+        setWeeklyCalories(total);
+      }
 
       // Find last Day A for the summary widget
       const lastA = sessions.find(s => s.workout_day === 'A');
@@ -87,6 +101,34 @@ export default function Dashboard({ session }) {
         {view === 'workout' && (
           <div className="p-6 space-y-8">
             <OuraWidget session={session} />
+
+            {/* Weekly Calorie Budget */}
+            <section className="card bg-neutral-900 border-neutral-800 p-5 space-y-4">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Budżet Kaloryczny (Tydzień)</h3>
+                  <p className="text-xl font-black text-white uppercase italic">
+                    {weeklyCalories.toLocaleString()} <span className="text-xs text-neutral-500">/ {weeklyBudget.toLocaleString()} kcal</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-primary uppercase">Zostało</p>
+                  <p className="text-sm font-black text-white italic">{(weeklyBudget - weeklyCalories).toLocaleString()} kcal</p>
+                </div>
+              </div>
+              
+              <div className="w-full h-3 bg-neutral-950 rounded-full border border-neutral-800 overflow-hidden p-0.5">
+                <div 
+                  className={`h-full rounded-full transition-all duration-1000 ${weeklyCalories > weeklyBudget ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]'}`}
+                  style={{ width: `${Math.min((weeklyCalories / weeklyBudget) * 100, 100)}%` }}
+                />
+              </div>
+
+              <div className="flex justify-between text-[8px] font-black uppercase text-neutral-600">
+                <span>Reset w Poniedziałek</span>
+                <span>Cel: 1800 / Dzień Średnio</span>
+              </div>
+            </section>
 
             {/* Treningi */}
             <section>
