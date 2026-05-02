@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass } from 'lucide-react';
+import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
@@ -75,7 +75,7 @@ export default function Dashboard({ session }) {
       {/* Header */}
       <header className="p-4 border-b border-neutral-800 flex justify-between items-center sticky top-0 bg-background/80 backdrop-blur-md z-20">
         <div>
-          <h1 className="font-black text-xl text-white uppercase tracking-tighter italic">Kuba Tracker V2</h1>
+          <h1 className="font-black text-xl text-white uppercase tracking-tighter italic">Kuba Tracker V2.1</h1>
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{session.user.email}</p>
         </div>
         <button onClick={() => supabase.auth.signOut()} className="p-2 text-neutral-500 hover:text-white transition-colors">
@@ -170,6 +170,36 @@ export default function Dashboard({ session }) {
                   <ProgressionTable />
                 </div>
               )}
+            </section>
+
+            {/* Zasady 2.1 */}
+            <section className="card bg-neutral-900/20 border-neutral-800 p-5 space-y-4">
+              <h2 className="text-[10px] font-bold text-neutral-500 tracking-widest uppercase flex items-center gap-2">
+                <Shield size={12} className="text-primary" /> Zasady Grande Finale 2.1
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-[8px] text-neutral-500 font-bold uppercase">Białko</p>
+                  <p className="text-[12px] font-black text-white uppercase italic">2.0-2.2g / KG</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[8px] text-neutral-500 font-bold uppercase">Deficyt</p>
+                  <p className="text-[12px] font-black text-white uppercase italic">300-500 KCAL</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[8px] text-neutral-500 font-bold uppercase">Kroki</p>
+                  <p className="text-[12px] font-black text-white uppercase italic">8-10K Dziennie</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[8px] text-neutral-500 font-bold uppercase">Sen</p>
+                  <p className="text-[12px] font-black text-white uppercase italic">Min. 7.5 H</p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-neutral-800/50">
+                <p className="text-[9px] font-black text-primary uppercase italic text-center italic tracking-widest">
+                  16 tygodni bez wymówek. Rób swoje.
+                </p>
+              </div>
             </section>
           </div>
         )}

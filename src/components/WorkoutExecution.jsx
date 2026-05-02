@@ -94,7 +94,7 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         session_notes: sessionNotes,
-        msp_passed: exercises.some(ex => ex.name.includes('Wyciskanie płaskie (Heavy)') && ex.sets.some(s => s.rpe === '1'))
+        msp_passed: exercises.some(ex => ex.name.toLowerCase().includes('wyciskanie płaskie') && ex.name.toLowerCase().includes('heavy') && ex.sets.some(s => s.rpe === '1'))
       }]).select();
 
       const sessionId = sessionData[0].id;

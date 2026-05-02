@@ -1,7 +1,7 @@
-# AI Context: Workout App (Grande Finale 2.0)
+# AI Context: Workout App (Grande Finale 2.1)
 
 ## 1. Cel Projektu
-Aplikacja służy do cyfryzacji i śledzenia 12-tygodniowego planu treningowego "Grande Finale 2.0". Głównym celem użytkownika jest osiągnięcie wyznaczonych celów siłowych...
+Aplikacja służy do cyfryzacji i śledzenia 16-tygodniowego planu treningowego "Grande Finale 2.1". Głównym celem użytkownika jest osiągnięcie wyznaczonych celów siłowych...
 
 ## 2. Tech Stack
 - **Frontend**: React + Vite
