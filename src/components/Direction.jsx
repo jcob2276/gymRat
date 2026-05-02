@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X } from 'lucide-react';
+import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X, MessageSquare, Heart, Smile, Meh, Frown, Laugh, Angry, Star } from 'lucide-react';
 import { format, subDays, startOfDay, parseISO, differenceInDays, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -17,6 +17,7 @@ export default function Direction({ session }) {
   const [habitLogs, setHabitLogs] = useState([]);
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const [newHabit, setNewHabit] = useState({ name: '', icon: '💪', is_positive: true });
+  const [isSavingJournal, setIsSavingJournal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -160,6 +161,31 @@ export default function Direction({ session }) {
       if (!error) setHabitLogs([...habitLogs, data]);
     }
   }
+
+  // Journaling Logic
+  const saveJournal = async (updates) => {
+    if (!todayWin) return;
+    setIsSavingJournal(true);
+    const { error } = await supabase
+      .from('daily_wins')
+      .update(updates)
+      .eq('id', todayWin.id);
+    
+    if (!error) {
+      setTodayWin(prev => ({ ...prev, ...updates }));
+    }
+    setIsSavingJournal(false);
+  };
+
+  const debounce = (fn, delay) => {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
+  };
+
+  const debouncedSaveJournal = debounce(saveJournal, 1000);
 
   // Stats logic
   const getStats = () => {
@@ -415,6 +441,85 @@ export default function Direction({ session }) {
             );
           })}
         </div>
+      </section>
+
+      {/* Journaling Section (Nowa Sekcja) */}
+      <section className="space-y-6">
+        <header className="flex justify-between items-center">
+          <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+            <MessageSquare size={12} /> Dziennik & Refleksja
+          </h2>
+          {isSavingJournal && <span className="text-[8px] font-black text-primary uppercase animate-pulse">Zapisywanie...</span>}
+        </header>
+
+        {todayWin ? (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
+            {/* Mood Tracker */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-center">Jak się dziś czujesz?</p>
+              <div className="flex justify-around items-center">
+                {[
+                  { score: 1, icon: <Angry size={24} />, color: 'text-red-500', label: 'Źle' },
+                  { score: 2, icon: <Frown size={24} />, color: 'text-orange-500', label: 'Słabo' },
+                  { score: 3, icon: <Meh size={24} />, color: 'text-yellow-500', label: 'Ok' },
+                  { score: 4, icon: <Smile size={24} />, color: 'text-green-500', label: 'Dobrze' },
+                  { score: 5, icon: <Star size={24} />, color: 'text-primary', label: 'Świetnie' },
+                ].map((m) => (
+                  <button 
+                    key={m.score}
+                    onClick={() => saveJournal({ mood_score: m.score })}
+                    className={`flex flex-col items-center gap-1 transition-all ${todayWin.mood_score === m.score ? 'scale-125 grayscale-0' : 'grayscale opacity-30 hover:opacity-100 hover:grayscale-0'}`}
+                  >
+                    <div className={m.color}>{m.icon}</div>
+                    <span className="text-[8px] font-black uppercase text-neutral-600">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Gratitude */}
+            <div className="space-y-3 pt-4 border-t border-neutral-800/50">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+                <Heart size={12} className="text-red-500" /> Za co jesteś dziś wdzięczny?
+              </label>
+              <textarea 
+                value={todayWin.gratitude_entry || ''}
+                onChange={(e) => {
+                  setTodayWin({ ...todayWin, gratitude_entry: e.target.value });
+                  debouncedSaveJournal({ gratitude_entry: e.target.value });
+                }}
+                placeholder="Np. Dobra kawa, udany trening, czas z bliskimi..."
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-white outline-none focus:border-primary resize-none min-h-[60px]"
+              />
+            </div>
+
+            {/* Thoughts */}
+            <div className="space-y-3 pt-4 border-t border-neutral-800/50">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+                <Compass size={12} className="text-primary" /> Przemyślenia & Wnioski
+              </label>
+              <textarea 
+                value={todayWin.journal_entry || ''}
+                onChange={(e) => {
+                  setTodayWin({ ...todayWin, journal_entry: e.target.value });
+                  debouncedSaveJournal({ journal_entry: e.target.value });
+                }}
+                placeholder="Jak minął dzień? Co poszło dobrze, a co można poprawić?..."
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-white outline-none focus:border-primary resize-none min-h-[120px]"
+              />
+            </div>
+
+            <div className="pt-2">
+              <p className="text-[8px] font-black text-neutral-700 uppercase italic text-center">
+                Wpisy są zapisywane automatycznie.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 text-center">
+            <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest italic">Zacznij nowy dzień (Power List), aby odblokować dziennik.</p>
+          </div>
+        )}
       </section>
 
       {/* Visualization & Stats */}
