@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield } from 'lucide-react';
+import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield, RotateCw } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
@@ -16,6 +16,7 @@ export default function Dashboard({ session }) {
   const [lastDayASession, setLastDayASession] = useState(null);
   const [showProgression, setShowProgression] = useState(false);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   const weeklyBudget = 12600; // 1800 * 7
 
   useEffect(() => {
@@ -57,6 +58,31 @@ export default function Dashboard({ session }) {
         const benchLogs = lastA.exercise_logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie'));
         setLastDayASession({ ...lastA, benchLogs });
       }
+    }
+  }
+
+  async function syncYazio() {
+    setIsSyncing(true);
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-yazio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authSession.access_token}`
+        },
+        body: JSON.stringify({ userId: session.user.id })
+      });
+      const res = await response.json();
+      if (res.success) {
+        fetchDashboardData();
+      } else {
+        alert('Błąd synchronizacji: ' + res.error);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncing(false);
     }
   }
 
@@ -104,11 +130,27 @@ export default function Dashboard({ session }) {
 
             {/* Weekly Calorie Budget */}
             <section className="card bg-neutral-900 border-neutral-800 p-5 space-y-4">
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Budżet Kaloryczny (Tydzień)</h3>
                   <p className="text-xl font-black text-white uppercase italic">
                     {weeklyCalories.toLocaleString()} <span className="text-xs text-neutral-500">/ {weeklyBudget.toLocaleString()} kcal</span>
+                  </p>
+                </div>
+                <button 
+                  onClick={syncYazio} 
+                  disabled={isSyncing}
+                  className={`p-2 bg-neutral-950 border border-neutral-800 rounded-lg text-primary hover:text-white transition-all ${isSyncing ? 'animate-spin' : ''}`}
+                >
+                  <RotateCw size={14} />
+                </button>
+              </div>
+
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Status</p>
+                  <p className="text-[10px] font-black text-white uppercase italic">
+                    {weeklyCalories > weeklyBudget ? 'Przekroczono!' : 'W normie'}
                   </p>
                 </div>
                 <div className="text-right">

@@ -182,7 +182,7 @@ export default function Stats({ session }) {
         daySessions.forEach(s => {
           md += `### 🏋️ Trening: Dzień ${s.workout_day}\n`;
           s.exercise_logs.forEach(l => { 
-            md += `- **${l.exercise_name}**: ${l.weight}kg x ${l.reps} ${l.is_pws_or_msp ? '🔥' : ''}\n`; 
+            md += `- **${l.exercise_name}**: ${l.weight}kg x ${l.reps} (MSP: ${l.rpe ?? '--'}) ${l.is_pws_or_msp ? '🔥' : ''}\n`; 
           });
           md += `\n`;
         });
