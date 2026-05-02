@@ -163,29 +163,23 @@ export default function Direction({ session }) {
   }
 
   // Journaling Logic
-  const saveJournal = async (updates) => {
+  const saveJournal = async () => {
     if (!todayWin) return;
     setIsSavingJournal(true);
     const { error } = await supabase
       .from('daily_wins')
-      .update(updates)
+      .update({
+        mood_score: todayWin.mood_score,
+        gratitude_entry: todayWin.gratitude_entry,
+        journal_entry: todayWin.journal_entry
+      })
       .eq('id', todayWin.id);
     
     if (!error) {
-      setTodayWin(prev => ({ ...prev, ...updates }));
+      // Show success briefly if needed, but for now just stop loading
     }
     setIsSavingJournal(false);
   };
-
-  const debounce = (fn, delay) => {
-    let timer;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), delay);
-    };
-  };
-
-  const debouncedSaveJournal = debounce(saveJournal, 1000);
 
   // Stats logic
   const getStats = () => {
@@ -457,23 +451,26 @@ export default function Direction({ session }) {
             {/* Mood Tracker */}
             <div className="space-y-3">
               <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-center">Jak się dziś czujesz?</p>
-              <div className="flex justify-around items-center">
+              <div className="flex justify-around items-center gap-2">
                 {[
-                  { score: 1, icon: <Angry size={24} />, color: 'text-red-500', label: 'Źle' },
-                  { score: 2, icon: <Frown size={24} />, color: 'text-orange-500', label: 'Słabo' },
-                  { score: 3, icon: <Meh size={24} />, color: 'text-yellow-500', label: 'Ok' },
-                  { score: 4, icon: <Smile size={24} />, color: 'text-green-500', label: 'Dobrze' },
-                  { score: 5, icon: <Star size={24} />, color: 'text-primary', label: 'Świetnie' },
-                ].map((m) => (
-                  <button 
-                    key={m.score}
-                    onClick={() => saveJournal({ mood_score: m.score })}
-                    className={`flex flex-col items-center gap-1 transition-all ${todayWin.mood_score === m.score ? 'scale-125 grayscale-0' : 'grayscale opacity-30 hover:opacity-100 hover:grayscale-0'}`}
-                  >
-                    <div className={m.color}>{m.icon}</div>
-                    <span className="text-[8px] font-black uppercase text-neutral-600">{m.label}</span>
-                  </button>
-                ))}
+                  { score: 1, icon: <Angry size={20} />, color: 'text-red-500', bg: 'bg-red-500/20', border: 'border-red-500/50', label: 'Źle' },
+                  { score: 2, icon: <Frown size={20} />, color: 'text-orange-500', bg: 'bg-orange-500/20', border: 'border-orange-500/50', label: 'Słabo' },
+                  { score: 3, icon: <Meh size={20} />, color: 'text-yellow-500', bg: 'bg-yellow-500/20', border: 'border-yellow-500/50', label: 'Ok' },
+                  { score: 4, icon: <Smile size={20} />, color: 'text-green-500', bg: 'bg-green-500/20', border: 'border-green-500/50', label: 'Dobrze' },
+                  { score: 5, icon: <Star size={20} />, color: 'text-primary', bg: 'bg-primary/20', border: 'border-primary/50', label: 'Świetnie' },
+                ].map((m) => {
+                  const isSelected = todayWin.mood_score === m.score;
+                  return (
+                    <button 
+                      key={m.score}
+                      onClick={() => setTodayWin({ ...todayWin, mood_score: m.score })}
+                      className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${isSelected ? `${m.bg} ${m.border} scale-105 shadow-lg` : 'border-neutral-800 bg-neutral-950/50 opacity-40 hover:opacity-80'}`}
+                    >
+                      <div className={isSelected ? m.color : 'text-neutral-500'}>{m.icon}</div>
+                      <span className={`text-[8px] font-black uppercase ${isSelected ? 'text-white' : 'text-neutral-700'}`}>{m.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -484,10 +481,7 @@ export default function Direction({ session }) {
               </label>
               <textarea 
                 value={todayWin.gratitude_entry || ''}
-                onChange={(e) => {
-                  setTodayWin({ ...todayWin, gratitude_entry: e.target.value });
-                  debouncedSaveJournal({ gratitude_entry: e.target.value });
-                }}
+                onChange={(e) => setTodayWin({ ...todayWin, gratitude_entry: e.target.value })}
                 placeholder="Np. Dobra kawa, udany trening, czas z bliskimi..."
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-white outline-none focus:border-primary resize-none min-h-[60px]"
               />
@@ -500,19 +494,26 @@ export default function Direction({ session }) {
               </label>
               <textarea 
                 value={todayWin.journal_entry || ''}
-                onChange={(e) => {
-                  setTodayWin({ ...todayWin, journal_entry: e.target.value });
-                  debouncedSaveJournal({ journal_entry: e.target.value });
-                }}
+                onChange={(e) => setTodayWin({ ...todayWin, journal_entry: e.target.value })}
                 placeholder="Jak minął dzień? Co poszło dobrze, a co można poprawić?..."
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-white outline-none focus:border-primary resize-none min-h-[120px]"
               />
             </div>
 
             <div className="pt-2">
-              <p className="text-[8px] font-black text-neutral-700 uppercase italic text-center">
-                Wpisy są zapisywane automatycznie.
-              </p>
+              <button 
+                onClick={saveJournal}
+                disabled={isSavingJournal}
+                className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
+              >
+                {isSavingJournal ? (
+                  <span className="animate-pulse">Zapisywanie...</span>
+                ) : (
+                  <>
+                    <Save size={14} /> Dodaj Wpis
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ) : (
