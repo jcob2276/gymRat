@@ -10,9 +10,13 @@ export default function Direction({ session }) {
   const [isEditingGoals, setIsEditingGoals] = useState(false);
   const [todayWin, setTodayWin] = useState(null);
   const [history, setHistory] = useState([]);
-  const [newTaskForm, setNewTaskForm] = useState(
-    Array.from({ length: 5 }, () => ({ task: '' }))
-  );
+  const [newTaskForm, setNewTaskForm] = useState([
+    { task: '', category: 'cialo' },
+    { task: '', category: 'duch' },
+    { task: '', category: 'konto' },
+    { task: '', category: 'cialo' },
+    { task: '', category: 'duch' },
+  ]);
   const [habits, setHabits] = useState([]);
   const [habitLogs, setHabitLogs] = useState([]);
   const [isAddingHabit, setIsAddingHabit] = useState(false);
@@ -67,6 +71,22 @@ export default function Direction({ session }) {
       .gte('date', subDays(new Date(), 30).toISOString().split('T')[0]);
     setHabitLogs(logsData || []);
 
+    // Auto-finalize unfinished past days
+    const pastUnfinished = historyData?.filter(d => d.date < today && d.result === null);
+    if (pastUnfinished?.length > 0) {
+      for (const day of pastUnfinished) {
+        await supabase.from('daily_wins').update({ result: 'P' }).eq('id', day.id);
+      }
+      // Refresh history after update
+      const { data: updatedHistory } = await supabase
+        .from('daily_wins')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('date', { ascending: false })
+        .limit(60);
+      setHistory(updatedHistory || []);
+    }
+
     setLoading(false);
   }
 
@@ -96,11 +116,12 @@ export default function Direction({ session }) {
     const entry = {
       user_id: session.user.id,
       date: today,
-      task_1: newTaskForm[0].task,
-      task_2: newTaskForm[1].task,
-      task_3: newTaskForm[2].task,
-      task_4: newTaskForm[3].task,
-      task_5: newTaskForm[4].task,
+      task_1: newTaskForm[0].task, category_1: newTaskForm[0].category,
+      task_2: newTaskForm[1].task, category_2: newTaskForm[1].category,
+      task_3: newTaskForm[2].task, category_3: newTaskForm[2].category,
+      task_4: newTaskForm[4].task, category_4: newTaskForm[3].category,
+      task_5: newTaskForm[4].task, category_5: newTaskForm[4].category,
+      result: null // Initial state
     };
 
     const { data, error } = await supabase.from('daily_wins').insert(entry).select().single();
@@ -120,8 +141,14 @@ export default function Direction({ session }) {
     });
 
     const updates = { [field]: newValue };
-    if (allDone) updates.result = 'Z';
-    else updates.result = null; // Still in progress if not all done
+    if (allDone) {
+      updates.result = 'Z';
+    } else {
+      // If we are still on the current day, it's null (in progress)
+      // but the user wants to see 'P' if not 5/5 at 23:00.
+      // We'll keep it null and let the auto-finalize handle it or show 'P' in UI if time > 23:00
+      updates.result = null;
+    }
 
     const { data, error } = await supabase
       .from('daily_wins')
@@ -202,15 +229,28 @@ export default function Direction({ session }) {
     }
 
     // Weekly Win (max 2P in current week)
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekDays = history.filter(d => parseISO(d.date) >= weekStart);
-    const weeklyP = weekDays.filter(d => d.result === 'P').length;
-    const weeklyWin = weeklyP <= 2 && weekDays.some(d => d.result === 'Z');
+    const weeks = [];
+    // Group history into weeks starting from current
+    for (let i = 0; i < 4; i++) {
+      const start = startOfWeek(subDays(new Date(), i * 7), { weekStartsOn: 1 });
+      const end = endOfWeek(start, { weekStartsOn: 1 });
+      const weekDays = history.filter(d => {
+        const dDate = parseISO(d.date);
+        return dDate >= start && dDate <= end;
+      });
+      const pCount = weekDays.filter(d => d.result === 'P').length;
+      const zCount = weekDays.filter(d => d.result === 'Z').length;
+      // Week is won if P <= 2 AND there was at least one day (to avoid empty weeks being wins)
+      const isWeekWin = pCount <= 2 && zCount > 0;
+      weeks.push({ isWeekWin, pCount, zCount, start });
+    }
 
-    return { streak, weeklyWin, weeklyP };
+    const monthlyWin = weeks.filter(w => w.isWeekWin).length >= 3;
+
+    return { streak, weeklyWin: weeks[0]?.isWeekWin, weeklyP: weeks[0]?.pCount, monthlyWin, weeks };
   };
 
-  const { streak, weeklyWin, weeklyP } = getStats();
+  const { streak, weeklyWin, weeklyP, monthlyWin, weeks } = getStats();
 
   if (loading) return <div className="p-8 text-center text-neutral-500 uppercase font-black animate-pulse tracking-widest">Wczytywanie Kierunku...</div>;
 
@@ -293,20 +333,33 @@ export default function Direction({ session }) {
           /* Formularz Nowego Dnia */
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
             <h3 className="text-[10px] font-black text-white uppercase tracking-widest text-center">Zdefiniuj 5 Zwycięstw na Dziś</h3>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {newTaskForm.map((t, i) => (
-                <input 
-                  key={i}
-                  placeholder={`Zadanie ${i+1}`}
-                  value={t.task}
-                  onChange={(e) => {
-                    const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[12px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
-                />
+                <div key={i} className="flex gap-2">
+                  <select 
+                    value={t.category}
+                    onChange={(e) => {
+                      const n = [...newTaskForm]; n[i].category = e.target.value; setNewTaskForm(n);
+                    }}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-2 text-[10px] font-black text-primary outline-none uppercase"
+                  >
+                    <option value="cialo">Ciało</option>
+                    <option value="duch">Duch</option>
+                    <option value="konto">Konto</option>
+                  </select>
+                  <input 
+                    placeholder={`Zadanie ${i+1}`}
+                    value={t.task}
+                    onChange={(e) => {
+                      const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
+                    }}
+                    className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[12px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
+                  />
+                </div>
               ))}
             </div>
             <button onClick={startNewDay} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20">Zatwierdź Listę</button>
+            <p className="text-[8px] text-neutral-500 font-bold uppercase text-center italic">Po zatwierdzeniu nie będziesz mógł zmienić treści zadań.</p>
           </div>
         ) : (
           /* Lista Zadań */
@@ -315,8 +368,13 @@ export default function Direction({ session }) {
               const task = todayWin[`task_${i+1}`];
               const category = todayWin[`category_${i+1}`];
               const done = todayWin[`done_${i+1}`];
-              const colorClass = category === 'cialo' ? 'border-dayC text-dayC' : category === 'duch' ? 'border-dayA text-dayA' : 'border-dayD text-dayD';
               
+              const catIcons = {
+                cialo: <Shield size={14} className="text-dayC" />,
+                duch: <Zap size={14} className="text-dayA" />,
+                konto: <Wallet size={14} className="text-dayD" />
+              };
+
               return (
                 <button 
                   key={i} 
@@ -328,6 +386,10 @@ export default function Direction({ session }) {
                       {done ? <CheckSquare size={16} /> : <Target size={16} />}
                     </div>
                     <div className="text-left">
+                      <div className="flex items-center gap-2 mb-1">
+                        {catIcons[category]}
+                        <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">{category}</span>
+                      </div>
                       <p className={`text-xs font-black uppercase italic ${done ? 'line-through text-neutral-600' : 'text-white'}`}>{task}</p>
                     </div>
                   </div>
@@ -521,6 +583,47 @@ export default function Direction({ session }) {
             <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest italic">Zacznij nowy dzień (Power List), aby odblokować dziennik.</p>
           </div>
         )}
+      </section>
+
+      {/* Power List Stats (New Section) */}
+      <section className="space-y-6">
+        <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+          <TrendingUp size={12} /> Status Power List
+        </h2>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className={`bg-neutral-900 border ${weeklyWin ? 'border-dayC/30' : 'border-dayB/30'} rounded-2xl p-5 space-y-3`}>
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Tydzień</p>
+            <div className="flex justify-between items-end">
+              <h3 className={`text-xl font-black uppercase italic ${weeklyWin ? 'text-dayC' : 'text-dayB'}`}>
+                {weeklyWin ? 'WYGRANY' : 'W TRAKCIE'}
+              </h3>
+              <p className="text-[10px] font-black text-white">{weeklyP} / 2 P</p>
+            </div>
+            <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all ${weeklyP > 2 ? 'bg-dayB' : 'bg-dayC'}`}
+                style={{ width: `${Math.max(10, 100 - (weeklyP * 33))}%` }}
+              />
+            </div>
+          </div>
+
+          <div className={`bg-neutral-900 border ${monthlyWin ? 'border-dayC/30' : 'border-dayB/30'} rounded-2xl p-5 space-y-3`}>
+            <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Miesiąc</p>
+            <div className="flex justify-between items-end">
+              <h3 className={`text-xl font-black uppercase italic ${monthlyWin ? 'text-dayC' : 'text-dayB'}`}>
+                {monthlyWin ? 'WYGRANY' : 'W TRAKCIE'}
+              </h3>
+              <p className="text-[10px] font-black text-white">{weeks.filter(w => w.isWeekWin).length} / 3 W</p>
+            </div>
+            <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-dayA transition-all"
+                style={{ width: `${(weeks.filter(w => w.isWeekWin).length / 3) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Visualization & Stats */}
