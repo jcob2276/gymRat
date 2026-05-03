@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X, MessageSquare, Heart, Smile, Meh, Frown, Laugh, Angry, Star, Mic } from 'lucide-react';
+import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X, MessageSquare, Heart, Smile, Meh, Frown, Laugh, Angry, Star, Mic, RotateCw, Trophy } from 'lucide-react';
 import { format, subDays, startOfDay, parseISO, differenceInDays, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -137,7 +137,7 @@ export default function Direction({ session }) {
       task_1: newTaskForm[0].task, category_1: newTaskForm[0].category,
       task_2: newTaskForm[1].task, category_2: newTaskForm[1].category,
       task_3: newTaskForm[2].task, category_3: newTaskForm[2].category,
-      task_4: newTaskForm[4].task, category_4: newTaskForm[3].category,
+      task_4: newTaskForm[3].task, category_4: newTaskForm[3].category,
       task_5: newTaskForm[4].task, category_5: newTaskForm[4].category,
       result: null // Initial state
     };
