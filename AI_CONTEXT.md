@@ -1,54 +1,97 @@
-# AI Context: Workout App (Grande Finale 2.1)
+# AI CONTEXT: KUBA WORKOUT APP (GRANDE FINALE 2.1)
 
-## 1. Cel Projektu
-Aplikacja służy do cyfryzacji i śledzenia 16-tygodniowego planu treningowego "Grande Finale 2.1". Głównym celem użytkownika jest osiągnięcie wyznaczonych celów siłowych...
+## 1. PROJECT OVERVIEW
+This is a high-performance, brutalist-styled tracking application designed for a 16-week transformation program. It combines physical training, nutritional management, physiological recovery tracking (Oura), and mental discipline (Power List).
 
-## 2. Tech Stack
-- **Frontend**: React + Vite
-- **Stylizacja**: Tailwind CSS (Styl: Brutalistyczny, ciemny motyw `#0a0a0a`, akcenty: `dayA-D`)
-- **Backend/Baza**: Supabase (PostgreSQL + RLS + Auth)
-- **Ikony**: Lucide-React
-- **Wykresy**: Recharts
+**Version:** 2.1 "Grande Finale"
+**Philosophy:** Efficiency, Data-driven discipline, Brutalist UI.
 
-## 3. Metodologia Treningowa
-Aplikacja opiera się na dwóch kluczowych technikach:
-- **MSP (Mimowolnie Spowolnione Powtórzenia)**: Stosowane w dniach ciężkich/średnich. Skupienie na kontroli i tempie.
-- **PWS (Pierwsze Wolne Spowolnienie)**: Stosowane w dniach lekkich i przy izolacjach (np. boki barku). Zostawianie 1-2 powtórzeń zapasu.
-- **RPE/RIR**: Śledzenie subiektywnej intensywności każdej serii (skala 7-10).
+---
 
-## 4. Kluczowe Funkcje i UX
-### Workout Execution (Serce apki)
-- **Single-Page Flow**: Cały trening to jedna długa, scrollowalna lista. Brak paginacji.
-- **Logowanie bez klikania**: Wystarczy wpisać KG i Reps. System uznaje serię za wykonaną, jeśli pola nie są puste.
-- **Auto Rest Timer**: Floating timer w rogu ekranu, który startuje automatycznie po wypełnieniu serii. Liczy czas "w górę".
-- **Drafty**: Postęp treningu jest zapisywany w `localStorage`, co pozwala na powrót do sesji po odświeżeniu strony.
+## 2. TECH STACK
+- **Frontend:** React, Vite, Tailwind CSS.
+- **Backend:** Supabase (PostgreSQL, Auth, Edge Functions).
+- **Icons:** Lucide-react.
+- **Date Handling:** date-fns.
+- **Visuals:** Recharts.
 
-### Statystyki i Progresja
-- **Charts**: Wizualizacja progresu w Bench Press, wagi ciała oraz obwodu talii.
-- **Export dla AI**: Funkcja generowania raportu `.md` z wybranego okresu, sformatowanego pod analizę przez LLM (Claude/GPT).
+---
 
-### Kierunek (Power List)
-- **5 Zwycięstw**: Codzienna lista zadań z kategorii Ciało/Duch/Konto.
-- **Dyscyplina**: Wizualizacja sukcesów (Z) i porażek (P) w formie 30-dniowego gridu.
-- **Context**: Stały podgląd na cele nadrzędne podczas planowania dnia.
+## 3. CORE MODULES & DATA LOGIC
 
-## 5. Struktura Bazy Danych (Supabase)
-- `workout_sessions`: ID sesji, data, czas trwania, notatki.
-- `exercise_logs`: Szczegóły serii (exercise_name, reps, weight, rpe).
-- `daily_habits`: Śledzenie nawyków (obecnie uproszczone/ukryte na prośbę użytkownika).
-- `body_metrics`: Waga i talia.
-- `oura_daily_summary`: Dane z pierścienia Oura (Readiness, Sleep).
-- `daily_nutrition`: Dzienne podsumowanie kalorii i białka (sync z Yazio).
-- `daily_food_entries`: Szczegółowa lista zjedzonych produktów (sync z Yazio) do raportów.
-- `life_goals`: Główne cele życiowe (Ciało, Duch, Konto).
-- `daily_wins`: Power List - 5 zadań dziennie i wynik dnia (Z/P).
+### 🏋️ TRAINING (Grande Finale 2.1)
+- **Schedule:** 4 days/week (Day A, B, C, D). 16-week cycle.
+- **Methodology:** 
+    - **MSP (Mimowolnie Spowolnione Powtórzenia):** A specific rating (0, 1, 2) of involuntary slowing down in the last reps.
+    - **Progressive Overload:** Target 100 kg Bench Press.
+- **Data Collected:** 
+    - Exercise name, weight, reps, RPE (used for MSP rating).
+    - Session duration, start/end time.
+    - Session verdict based on MSP (Add weight / Stay / Deload).
+- **Persistence:** Local draft storage in `localStorage` to prevent data loss on app refresh.
 
-## 6. Zasady Designu
-- **Kolory**: Tło `#0a0a0a`, karty `#171717`.
-- **Typografia**: Wszystkie nagłówki i przyciski akcji są w trybie **UPPERCASE**, czcionka o dużej grubości (font-black).
-- **Interakcja**: Maksymalna redukcja liczby kliknięć. Priorytetem jest szybkość obsługi spoconymi dłońmi na siłowni.
+### 🎯 POWER LIST (Kierunek)
+- **Daily Logic:** 
+    - Exactly 5 tasks per day.
+    - Each task assigned to: **Ciało** (Body), **Duch** (Spirit), **Konto** (Finance).
+    - Result: **Z (Win)** if 5/5, **P (Loss)** if < 5/5.
+    - **Locking:** Tasks are locked for editing once the day is started.
+- **Weekly Logic:** Max 2 losses (P) per 7 days = **Weekly Win**.
+- **Monthly Logic:** Min 3 winning weeks per 4 weeks = **Monthly Win**.
+- **Auto-Finalize:** Unfinished days are automatically marked as 'P' at midnight.
 
-## 7. Jak rozwijać?
-- Każda nowa funkcja musi pasować do brutalistycznego stylu.
-- Unikać modali tam, gdzie wystarczy inline-expand.
-- Priorytetyzować wydajność na urządzeniach mobilnych.
+### 📓 JOURNALING & REVIEW
+- **Daily Journal:** Mood score (1-5), Gratitude entry, Daily reflections. Auto-saves.
+- **Weekly Review (Sundays Only):** 
+    - Prompts: "Proud of", "Sabotage", "Do differently".
+    - Locked after submission.
+- **Life Goals:** Long-term goals for Ciało, Duch, Konto with countdown timers.
+
+### 🥗 NUTRITION & CALORIE BUDGET
+- **Source:** Yazio (Synced via Supabase Edge Function).
+- **Daily Goal:** 150g Protein target.
+- **Weekly Budget:** **12,600 kcal** total (avg 1800/day).
+- **Reset:** Weekly budget resets every Monday morning.
+
+### 💍 OURA INTEGRATION
+- **Data:** Readiness score, Sleep hours, Activity levels.
+- **Sync:** Automated nightly sync via Edge Functions.
+
+### 📈 EXPORTS
+- **Markdown Export:** Generates a comprehensive summary of workouts, Yazio nutrition data, and Journaling/Weekly Review notes for external archival.
+
+---
+
+## 4. DATABASE SCHEMA (SUPABASE)
+
+### `workout_sessions` & `exercise_logs`
+- Stores sessions metadata (start/end, day key, MSP verdict) and individual set data (weight, reps, rpe).
+
+### `daily_wins`
+- Stores Power List tasks (`task_1..5`), categories (`category_1..5`), completion (`done_1..5`), daily `result` (Z/P), and journaling data (`mood_score`, `gratitude_entry`, `journal_entry`).
+
+### `weekly_reviews`
+- Stores Sunday reflections linked to `week_start`.
+
+### `daily_nutrition` & `daily_food_entries`
+- Aggregated macros/calories and individual product logs from Yazio.
+
+### `oura_daily_summary`
+- Physiological data (readiness, sleep, etc.).
+
+### `habits` & `habit_logs`
+- User-defined habits and daily completion history (30-day heatmap).
+
+### `life_goals`
+- Contextual long-term targets.
+
+---
+
+## 5. UI/UX GUIDELINES
+- **Theme:** Brutalist Dark Mode.
+- **Typography:** Uppercase, font-black, font-italic for emphasis.
+- **Colors:** 
+    - Primary: `#3b82f6` (Blue)
+    - Win: `#22c55e` (Green)
+    - Loss: `#ef4444` (Red)
+- **Interactive:** Haptic-style buttons, high-contrast states, animated progress bars.
