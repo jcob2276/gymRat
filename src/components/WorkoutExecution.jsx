@@ -44,12 +44,25 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
       const savedDraft = localStorage.getItem(draftKey);
       
       if (savedDraft) {
-        const draft = JSON.parse(savedDraft);
-        setExercises(draft.exercises);
-        setActiveExerciseIdx(draft.activeExerciseIdx || 0);
-        setSessionNotes(draft.sessionNotes || '');
-        if (draft.startTime) setStartTime(new Date(draft.startTime));
-      } else if (plan?.exercises) {
+        try {
+          const draft = JSON.parse(savedDraft);
+          if (draft && Array.isArray(draft.exercises)) {
+            setExercises(draft.exercises);
+            // Ensure index is within bounds
+            const idx = draft.activeExerciseIdx || 0;
+            setActiveExerciseIdx(idx < draft.exercises.length ? idx : 0);
+            setSessionNotes(draft.sessionNotes || '');
+            if (draft.startTime) setStartTime(new Date(draft.startTime));
+            return; // Exit if draft loaded successfully
+          }
+        } catch (e) {
+          console.error('Failed to parse workout draft', e);
+          localStorage.removeItem(draftKey);
+        }
+      } 
+      
+      // Fallback to plan if no draft or draft failed
+      if (plan?.exercises) {
         const initialExercises = plan.exercises.map(ex => ({
           ...ex,
           sets: Array.from({ length: ex.sets }, () => ({ weight: '', reps: '', rpe: '' }))
@@ -195,7 +208,7 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
               <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest mb-1">Cel Planu</span>
-              <span className="text-xl font-black text-white">{currentEx?.sets.length} x {currentEx?.reps}</span>
+              <span className="text-xl font-black text-white">{currentEx?.sets?.length || 0} x {currentEx?.reps}</span>
               <span className="text-[8px] text-primary font-bold uppercase mt-1">Tempo: {currentEx?.tempo}</span>
             </div>
             <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
@@ -213,8 +226,8 @@ export default function WorkoutExecution({ session, dayKey, onBack }) {
             <span>Seria</span><span>KG</span><span>Reps</span><span>MSP (0-2)</span>
           </div>
           <div className="space-y-3">
-            {currentEx?.sets.map((set, setIdx) => {
-              const prevSet = previousData[currentEx.name]?.[setIdx];
+            {currentEx?.sets?.map((set, setIdx) => {
+              const prevSet = previousData[currentEx?.name]?.[setIdx];
               return (
                 <div key={setIdx} className="grid grid-cols-4 gap-2 bg-neutral-900/30 p-2 rounded-2xl border border-neutral-900/50 focus-within:border-primary/50 transition-colors">
                   <div className="flex flex-col items-center justify-center">
