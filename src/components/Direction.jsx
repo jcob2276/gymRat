@@ -28,8 +28,10 @@ export default function Direction({ session }) {
   const currentWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (session?.user?.id) {
+      fetchData();
+    }
+  }, [session?.user?.id]);
 
   async function fetchData() {
     setLoading(true);
@@ -77,25 +79,32 @@ export default function Direction({ session }) {
 
     // Fetch Weekly Review if Sunday
     if (isSunday) {
-      const { data: reviewData } = await supabase
+      const { data: reviewData, error: reviewError } = await supabase
         .from('weekly_reviews')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('week_start', currentWeekStart)
-        .single();
+        .maybeSingle();
       
+      if (reviewError) console.error('Error fetching weekly review:', reviewError);
       if (reviewData) {
         setCurrentReview(reviewData);
       }
     }
 
-    // Auto-finalize unfinished past days
+    // Auto-finalize unfinished days (past days or today after 23:00)
+    const now = new Date();
+    const isPastDeadline = now.getHours() >= 23;
     const pastUnfinished = historyData?.filter(d => d.date < today && d.result === null);
-    if (pastUnfinished?.length > 0) {
-      for (const day of pastUnfinished) {
+    const todayUnfinished = (todayData && todayData.result === null && isPastDeadline) ? [todayData] : [];
+    
+    const toFinalize = [...(pastUnfinished || []), ...todayUnfinished];
+
+    if (toFinalize.length > 0) {
+      for (const day of toFinalize) {
         await supabase.from('daily_wins').update({ result: 'P' }).eq('id', day.id);
       }
-      // Refresh history after update
+      // Refresh history and today data after update
       const { data: updatedHistory } = await supabase
         .from('daily_wins')
         .select('*')
@@ -103,6 +112,9 @@ export default function Direction({ session }) {
         .order('date', { ascending: false })
         .limit(60);
       setHistory(updatedHistory || []);
+      
+      const updatedToday = updatedHistory.find(d => d.date === today);
+      if (updatedToday) setTodayWin(updatedToday);
     }
 
     setLoading(false);
@@ -162,10 +174,9 @@ export default function Direction({ session }) {
     if (allDone) {
       updates.result = 'Z';
     } else {
-      // If we are still on the current day, it's null (in progress)
-      // but the user wants to see 'P' if not 5/5 at 23:00.
-      // We'll keep it null and let the auto-finalize handle it or show 'P' in UI if time > 23:00
-      updates.result = null;
+      // If we are past 23:00, any change that isn't 5/5 keeps/sets the status to 'P'
+      const isPastDeadline = new Date().getHours() >= 23;
+      updates.result = isPastDeadline ? 'P' : null;
     }
 
     const { data, error } = await supabase
@@ -228,21 +239,25 @@ export default function Direction({ session }) {
 
   const saveWeeklyReview = async () => {
     if (currentReview) return;
+    
+    console.log('Saving Weekly Review for:', currentWeekStart, reviewForm);
+    
     const { data, error } = await supabase
       .from('weekly_reviews')
-      .insert({
+      .upsert({
         user_id: session.user.id,
         week_start: currentWeekStart,
         ...reviewForm
-      })
+      }, { onConflict: 'user_id,week_start' })
       .select()
-      .single();
+      .maybeSingle();
     
     if (!error) {
       setCurrentReview(data);
       alert('Tydzień zamknięty pomyślnie!');
     } else {
-      alert('Błąd zapisu przeglądu');
+      console.error('Weekly Review Save Error Details:', error);
+      alert(`Błąd zapisu przeglądu: ${error.message || 'Nieznany błąd'}\n\nSzczegóły: ${JSON.stringify(error)}`);
     }
   };
 
