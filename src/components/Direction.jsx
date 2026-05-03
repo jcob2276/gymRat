@@ -373,7 +373,7 @@ export default function Direction({ session }) {
       </section>
 
       {/* Weekly Review Section (Sunday Only) */}
-      {isSunday && (
+      {isSunday && !currentReview && (
         <section className="space-y-6 animate-in slide-in-from-top-4 duration-500">
           <header className="flex justify-between items-center">
             <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
