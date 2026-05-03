@@ -176,8 +176,19 @@ export default function Stats({ session }) {
       const { data: reviews } = await supabase.from('weekly_reviews').select('*').eq('user_id', session.user.id).gte('week_start', dateRange.from).lte('week_start', dateRange.to);
       weeklyReviews = reviews || [];
 
+      const { data: goals } = await supabase.from('life_goals').select('*').eq('user_id', session.user.id).single();
+      const { data: habits } = await supabase.from('habits').select('*').eq('user_id', session.user.id);
+      const { data: habitLogs } = await supabase.from('habit_logs').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
+
       let md = `# RAPORT TRENINGOWY KUBA\n`;
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
+
+      if (goals) {
+        md += `## 🎯 TWOJE CELE (KONTEKST)\n`;
+        md += `- **Ciało:** ${goals.goal_cialo}\n`;
+        md += `- **Duch:** ${goals.goal_duch}\n`;
+        md += `- **Konto:** ${goals.goal_konto}\n\n`;
+      }
 
       const dates = [...new Set([
         ...sessions.map(s => s.date),
@@ -226,7 +237,20 @@ export default function Stats({ session }) {
           }
         }
         if (includeJournal && dayJournal) {
-          md += `### 📓 Notatnik & Refleksja\n`;
+          md += `### 📓 Notatnik & Power Lista\n`;
+          md += `**Wynik Dnia:** ${dayJournal.result === 'Z' ? 'WYGRANA (Z)' : 'PORAŻKA (P)'}\n\n`;
+          
+          md += `#### Zadania:\n`;
+          for (let i = 1; i <= 5; i++) {
+            const task = dayJournal[`task_${i}`];
+            const cat = dayJournal[`category_${i}`];
+            const done = dayJournal[`done_${i}`];
+            if (task) {
+              md += `- [${done ? 'x' : ' '}] (${cat}) ${task}\n`;
+            }
+          }
+          md += `\n`;
+
           if (dayJournal.mood_score) {
             const moods = ['Źle', 'Słabo', 'Ok', 'Dobrze', 'Świetnie'];
             md += `**Nastrój:** ${moods[dayJournal.mood_score - 1] || 'Nieokreślony'}\n`;
@@ -235,8 +259,21 @@ export default function Stats({ session }) {
             md += `**Wdzięczność:** ${dayJournal.gratitude_entry}\n`;
           }
           if (dayJournal.journal_entry) {
-            md += `**Notatki:** ${dayJournal.journal_entry}\n`;
+            md += `**Refleksja:** ${dayJournal.journal_entry}\n`;
           }
+          md += `\n`;
+        }
+
+        // Daily Habits
+        const dayHabitLogs = habitLogs?.filter(l => l.date === dateStr);
+        if (dayHabitLogs?.length > 0) {
+          md += `### ✅ Nawyki Dnia\n`;
+          dayHabitLogs.forEach(log => {
+            const habit = habits?.find(h => h.id === log.habit_id);
+            if (habit) {
+              md += `- ${habit.icon} ${habit.name}: ${habit.is_positive ? 'Wykonano' : 'Uniknięto'}\n`;
+            }
+          });
           md += `\n`;
         }
 
