@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X, MessageSquare, Heart, Smile, Meh, Frown, Laugh, Angry, Star } from 'lucide-react';
+import { Compass, Target, Shield, Wallet, CheckSquare, Square, Save, Edit2, TrendingUp, Calendar, Zap, AlertCircle, Plus, Trash2, X, MessageSquare, Heart, Smile, Meh, Frown, Laugh, Angry, Star, Mic } from 'lucide-react';
 import { format, subDays, startOfDay, parseISO, differenceInDays, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -22,6 +22,10 @@ export default function Direction({ session }) {
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const [newHabit, setNewHabit] = useState({ name: '', icon: '💪', is_positive: true });
   const [isSavingJournal, setIsSavingJournal] = useState(false);
+  const [currentReview, setCurrentReview] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ proud_of: '', sabotage: '', do_differently: '' });
+  const isSunday = new Date().getDay() === 0;
+  const currentWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
   useEffect(() => {
     fetchData();
@@ -70,6 +74,20 @@ export default function Direction({ session }) {
       .eq('user_id', session.user.id)
       .gte('date', subDays(new Date(), 30).toISOString().split('T')[0]);
     setHabitLogs(logsData || []);
+
+    // Fetch Weekly Review if Sunday
+    if (isSunday) {
+      const { data: reviewData } = await supabase
+        .from('weekly_reviews')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('week_start', currentWeekStart)
+        .single();
+      
+      if (reviewData) {
+        setCurrentReview(reviewData);
+      }
+    }
 
     // Auto-finalize unfinished past days
     const pastUnfinished = historyData?.filter(d => d.date < today && d.result === null);
@@ -208,6 +226,26 @@ export default function Direction({ session }) {
     setIsSavingJournal(false);
   };
 
+  const saveWeeklyReview = async () => {
+    if (currentReview) return;
+    const { data, error } = await supabase
+      .from('weekly_reviews')
+      .insert({
+        user_id: session.user.id,
+        week_start: currentWeekStart,
+        ...reviewForm
+      })
+      .select()
+      .single();
+    
+    if (!error) {
+      setCurrentReview(data);
+      alert('Tydzień zamknięty pomyślnie!');
+    } else {
+      alert('Błąd zapisu przeglądu');
+    }
+  };
+
   // Stats logic
   const getStats = () => {
     if (!history.length) return { streak: 0, weeklyWin: false, monthlyWin: false };
@@ -318,6 +356,54 @@ export default function Direction({ session }) {
           })}
         </div>
       </section>
+
+      {/* Weekly Review Section (Sunday Only) */}
+      {isSunday && (
+        <section className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+          <header className="flex justify-between items-center">
+            <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
+              <Calendar size={12} /> Przegląd Tygodnia
+            </h2>
+            {currentReview && <span className="text-[8px] font-black text-dayC uppercase">Tydzień Zamknięty</span>}
+          </header>
+
+          <div className="bg-neutral-900 border border-primary/20 rounded-2xl p-6 space-y-6 shadow-xl shadow-primary/5">
+            {[
+              { key: 'proud_of', label: 'Co zrobiłem w tym tygodniu z czego jestem dumny?', icon: <Trophy size={14} className="text-dayD" /> },
+              { key: 'sabotage', label: 'Co sabotowało mój postęp — i dlaczego na to pozwoliłem?', icon: <AlertCircle size={14} className="text-dayB" /> },
+              { key: 'do_differently', label: 'Gdybym mógł powtórzyć ten tydzień — co zrobiłbym inaczej?', icon: <RotateCw size={14} className="text-dayA" /> },
+            ].map((q) => (
+              <div key={q.key} className="space-y-3">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center justify-between">
+                  <span className="flex items-center gap-2">{q.icon} {q.label}</span>
+                  {!currentReview && <Mic size={10} className="text-neutral-700 hover:text-primary cursor-pointer" />}
+                </label>
+                {currentReview ? (
+                  <div className="bg-neutral-950/50 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-neutral-400 italic leading-relaxed">
+                    {currentReview[q.key]}
+                  </div>
+                ) : (
+                  <textarea 
+                    value={reviewForm[q.key]}
+                    onChange={(e) => setReviewForm({...reviewForm, [q.key]: e.target.value})}
+                    placeholder="Wpisz swoje przemyślenia..."
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-[12px] font-bold text-white outline-none focus:border-primary resize-none min-h-[80px] transition-all"
+                  />
+                )}
+              </div>
+            ))}
+
+            {!currentReview && (
+              <button 
+                onClick={saveWeeklyReview}
+                className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20"
+              >
+                Zamknij Tydzień
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Main Section: Daily Wins */}
       <section className="space-y-6">

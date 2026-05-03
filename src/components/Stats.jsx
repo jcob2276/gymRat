@@ -172,6 +172,10 @@ export default function Stats({ session }) {
         journalEntries = journal || [];
       }
 
+      let weeklyReviews = [];
+      const { data: reviews } = await supabase.from('weekly_reviews').select('*').eq('user_id', session.user.id).gte('week_start', dateRange.from).lte('week_start', dateRange.to);
+      weeklyReviews = reviews || [];
+
       let md = `# RAPORT TRENINGOWY KUBA\n`;
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
 
@@ -238,6 +242,16 @@ export default function Stats({ session }) {
 
         md += `---\n\n`;
       });
+
+      if (weeklyReviews.length > 0) {
+        md += `# 📑 PRZEGLĄDY TYGODNIA\n\n`;
+        weeklyReviews.forEach(r => {
+          md += `## Tydzień od ${r.week_start}\n`;
+          md += `**Duma:** ${r.proud_of}\n`;
+          md += `**Sabotaż:** ${r.sabotage}\n`;
+          md += `**Inaczej:** ${r.do_differently}\n\n`;
+        });
+      }
 
       const blob = new Blob([md], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
