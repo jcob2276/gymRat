@@ -293,9 +293,9 @@ export default function Direction({ session }) {
       });
       const pCount = weekDays.filter(d => d.result === 'P').length;
       const zCount = weekDays.filter(d => d.result === 'Z').length;
-      // Week is won if P <= 2 AND there was at least one day (to avoid empty weeks being wins)
-      const isWeekWin = pCount <= 2 && zCount > 0;
-      weeks.push({ isWeekWin, pCount, zCount, start });
+      // Week is won if P <= 2. To avoid empty weeks being wins, check if weekDays has entries.
+      const isWeekWin = weekDays.length > 0 && pCount <= 2;
+      weeks.push({ isWeekWin, pCount, zCount, start, isFull: weekDays.length >= 7 });
     }
 
     const monthlyWin = weeks.filter(w => w.isWeekWin).length >= 3;
@@ -693,11 +693,11 @@ export default function Direction({ session }) {
         </h2>
         
         <div className="grid grid-cols-2 gap-4">
-          <div className={`bg-neutral-900 border ${weeklyWin ? 'border-dayC/30' : 'border-dayB/30'} rounded-2xl p-5 space-y-3`}>
+          <div className={`bg-neutral-900 border ${weeklyP > 2 ? 'border-dayB/30' : 'border-dayC/30'} rounded-2xl p-5 space-y-3`}>
             <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Tydzień</p>
             <div className="flex justify-between items-end">
-              <h3 className={`text-xl font-black uppercase italic ${weeklyWin ? 'text-dayC' : 'text-dayB'}`}>
-                {weeklyWin ? 'WYGRANY' : 'W TRAKCIE'}
+              <h3 className={`text-xl font-black uppercase italic ${weeklyP > 2 ? 'text-dayB' : 'text-dayC'}`}>
+                {weeklyP > 2 ? 'PRZEGRANY' : (isSunday ? 'WYGRANY' : 'W TRAKCIE')}
               </h3>
               <p className="text-[10px] font-black text-white">{weeklyP} / 2 P</p>
             </div>
