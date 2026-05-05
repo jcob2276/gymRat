@@ -437,9 +437,10 @@ export default function Stats({ session }) {
                 <XAxis dataKey="date" hide />
                 <YAxis yAxisId="left" domain={['dataMin - 1', 'dataMax + 1']} stroke="#ffffff" fontSize={8} />
                 <YAxis yAxisId="right" orientation="right" domain={['dataMin - 1', 'dataMax + 1']} stroke="#3b82f6" fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px' }} />
-                <Line yAxisId="left" type="monotone" dataKey="weight" name="Waga" stroke="#ffffff" strokeWidth={3} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="waist" name="Talia" stroke="#3b82f6" strokeWidth={3} dot={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #262626', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }} />
+                <Line yAxisId="left" type="monotone" dataKey="weight" name="Waga (kg)" stroke="#ffffff" strokeWidth={3} dot={{ fill: '#ffffff', r: 2 }} connectNulls={true} />
+                <Line yAxisId="right" type="monotone" dataKey="waist" name="Talia (cm)" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 2 }} connectNulls={true} />
+                <Line yAxisId="right" type="monotone" dataKey="body_fat" name="Tłuszcz (%)" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls={true} />
               </LineChart>
             </ResponsiveContainer>
           </div>

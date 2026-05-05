@@ -42,7 +42,7 @@ serve(async (req) => {
       return new Response('Nie znaleziono konfiguracji Google Fit w bazie danych.', { status: 500 })
     }
 
-    const redirectUri = `${url.origin}${url.pathname}`
+    const redirectUri = `https://pdvqkgfsqziqlhptatgf.supabase.co/functions/v1/google-fit-auth`
 
     // 2. Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

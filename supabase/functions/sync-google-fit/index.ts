@@ -59,9 +59,13 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          aggregateBy: [{
-            dataSourceId: "derived:com.google.weight:com.google.android.gms:merge_weight"
-          }],
+          aggregateBy: [
+            { dataSourceId: "derived:com.google.weight:com.google.android.gms:merge_weight" },
+            { dataTypeName: "com.google.body.fat.percentage" },
+            { dataTypeName: "com.google.body.muscle_mass" },
+            { dataTypeName: "com.google.body.bone_mass" },
+            { dataTypeName: "com.google.body.water.percentage" }
+          ],
           bucketByTime: { durationMillis: 86400000 }, // Daily buckets
           startTimeMillis,
           endTimeMillis,
@@ -76,15 +80,23 @@ serve(async (req) => {
     if (data.bucket) {
       for (const bucket of data.bucket) {
         const date = new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0]
-        const weightValue = bucket.dataset[0].point[0]?.value[0]?.fpVal
+        const weightValue = bucket.dataset[0]?.point[0]?.value[0]?.fpVal
+        const fatValue = bucket.dataset[1]?.point[0]?.value[0]?.fpVal
+        const muscleValue = bucket.dataset[2]?.point[0]?.value[0]?.fpVal
+        const boneValue = bucket.dataset[3]?.point[0]?.value[0]?.fpVal
+        const waterValue = bucket.dataset[4]?.point[0]?.value[0]?.fpVal
 
-        if (weightValue) {
+        if (weightValue || fatValue || muscleValue || boneValue || waterValue) {
           const { error: upsertError } = await supabaseClient
             .from('body_metrics')
             .upsert({
               user_id: userId,
               date: date,
-              weight: Math.round(weightValue * 10) / 10 // Round to 1 decimal
+              weight: weightValue ? Math.round(weightValue * 10) / 10 : undefined,
+              body_fat: fatValue ? Math.round(fatValue * 10) / 10 : undefined,
+              muscle_mass: muscleValue ? Math.round(muscleValue * 10) / 10 : undefined,
+              bone_mass: boneValue ? Math.round(boneValue * 10) / 10 : undefined,
+              body_water: waterValue ? Math.round(waterValue * 10) / 10 : undefined
             }, { onConflict: 'user_id,date' })
 
           if (!upsertError) syncedCount++
