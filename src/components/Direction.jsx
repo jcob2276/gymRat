@@ -283,20 +283,33 @@ export default function Direction({ session }) {
 
     // Weekly Win (max 2P in current week)
     const weeks = [];
-    // Group history into weeks starting from current
-    for (let i = 0; i < 4; i++) {
-      const start = startOfWeek(subDays(new Date(), i * 7), { weekStartsOn: 1 });
-      const end = endOfWeek(start, { weekStartsOn: 1 });
-      const weekDays = history.filter(d => {
-        const dDate = parseISO(d.date);
-        return dDate >= start && dDate <= end;
-      });
-      const pCount = weekDays.filter(d => d.result === 'P').length;
-      const zCount = weekDays.filter(d => d.result === 'Z').length;
-      // Week is won if P <= 2. To avoid empty weeks being wins, check if weekDays has entries.
-      const isWeekWin = weekDays.length > 0 && pCount <= 2;
-      weeks.push({ isWeekWin, pCount, zCount, start, isFull: weekDays.length >= 7 });
-    }
+      // Group history into weeks starting from current
+      for (let i = 0; i < 4; i++) {
+        const start = startOfWeek(subDays(new Date(), i * 7), { weekStartsOn: 1 });
+        const end = endOfWeek(start, { weekStartsOn: 1 });
+        const weekDays = history.filter(d => {
+          const dDate = parseISO(d.date);
+          return dDate >= start && dDate <= end;
+        });
+
+        // Calculate expected days in this week (up to today if current week)
+        let expectedDays = 7;
+        const today = startOfDay(new Date());
+        if (isWithinInterval(today, { start, end })) {
+          expectedDays = differenceInDays(today, start) + 1;
+        }
+
+        const zCount = weekDays.filter(d => d.result === 'Z').length;
+        const actualEntries = weekDays.length;
+        const missingDays = expectedDays - actualEntries;
+        
+        // P count is explicit P's plus missing days (days where no 5 tasks were added)
+        const pCount = weekDays.filter(d => d.result === 'P').length + Math.max(0, missingDays);
+        
+        // Week is won if P <= 2.
+        const isWeekWin = pCount <= 2;
+        weeks.push({ isWeekWin, pCount, zCount, start, isFull: actualEntries >= 7 });
+      }
 
     const monthlyWin = weeks.filter(w => w.isWeekWin).length >= 3;
 

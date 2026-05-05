@@ -13,7 +13,7 @@ export default function Stats({ session }) {
   const [loading, setLoading] = useState(true);
   const [bodyData, setBodyData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
-  const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
+  const [newMetric, setNewMetric] = useState({ weight: '', waist: '', weight_italia: '' });
   const [ouraTrend, setOuraTrend] = useState([]);
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
@@ -26,6 +26,9 @@ export default function Stats({ session }) {
   const [includeYazio, setIncludeYazio] = useState(true);
   const [includeJournal, setIncludeJournal] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingFit, setIsSyncingFit] = useState(false);
+  const [googleFitConnected, setGoogleFitConnected] = useState(false);
+  const [googleFitConfig, setGoogleFitConfig] = useState({ id: '', secret: '' });
   const [editingSession, setEditingSession] = useState(null);
   const [editForm, setEditForm] = useState({ date: '', logs: [] });
 
@@ -46,6 +49,12 @@ export default function Stats({ session }) {
       const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
       const thisWeekSessions = sessions?.filter(s => parseISO(s.created_at) >= thisWeekStart).length || 0;
       setWeeklyStats({ compliance: thisWeekSessions });
+    }
+
+    const { data: settings } = await supabase.from('user_settings').select('*').eq('user_id', session.user.id).single();
+    if (settings) {
+      setGoogleFitConnected(!!settings.google_fit_refresh_token);
+      setGoogleFitConfig({ id: settings.google_fit_client_id, secret: settings.google_fit_client_secret });
     }
 
     if (body) setBodyData(body);
@@ -82,7 +91,8 @@ export default function Stats({ session }) {
       user_id: session.user.id,
       date: today,
       weight: newMetric.weight ? parseFloat(newMetric.weight) : null,
-      waist: newMetric.waist ? parseFloat(newMetric.waist) : null
+      waist: newMetric.waist ? parseFloat(newMetric.waist) : null,
+      weight_italia: newMetric.weight_italia ? parseFloat(newMetric.weight_italia) : null
     });
     if (error) alert(error.message);
     else { alert('Zapisano!'); fetchStats(); }
@@ -117,6 +127,44 @@ export default function Stats({ session }) {
       alert('Błąd połączenia z funkcją');
     } finally {
       setIsSyncing(false);
+    }
+  }
+
+  async function connectGoogleFit() {
+    if (!googleFitConfig.id) {
+      alert('Najpierw wpisz Client ID w bazie danych (tabela user_settings).');
+      return;
+    }
+    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-fit-auth`;
+    const scope = 'https://www.googleapis.com/auth/fitness.body.read';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleFitConfig.id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
+    
+    window.open(authUrl, '_blank', 'width=600,height=600');
+  }
+
+  async function syncGoogleFit() {
+    setIsSyncingFit(true);
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-google-fit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authSession.access_token}`
+        },
+        body: JSON.stringify({ userId: session.user.id })
+      });
+      const res = await response.json();
+      if (res.success) {
+        alert(`Zsynchronizowano wagę! (${res.synced_days} dni)`);
+        fetchStats();
+      } else {
+        alert('Błąd synchronizacji Google Fit: ' + res.error);
+      }
+    } catch (err) {
+      alert('Błąd połączenia z funkcją Google Fit');
+    } finally {
+      setIsSyncingFit(false);
     }
   }
   async function startEditing(session) {
@@ -159,6 +207,7 @@ export default function Stats({ session }) {
     setIsExporting(true);
     try {
       const { data: sessions } = await supabase.from('workout_sessions').select('*, exercise_logs(*)').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to).order('date', { ascending: true });
+      const { data: bodyMetrics } = await supabase.from('body_metrics').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to).order('date', { ascending: true });
       
       let foodEntries = [];
       if (includeYazio) {
@@ -179,6 +228,9 @@ export default function Stats({ session }) {
       const { data: goals } = await supabase.from('life_goals').select('*').eq('user_id', session.user.id).single();
       const { data: habits } = await supabase.from('habits').select('*').eq('user_id', session.user.id);
       const { data: habitLogs } = await supabase.from('habit_logs').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
+      const { data: ouraData } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
+      const { data: photos } = await supabase.from('progress_photos').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
+
 
       let md = `# RAPORT TRENINGOWY KUBA\n`;
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
@@ -193,17 +245,72 @@ export default function Stats({ session }) {
       const dates = [...new Set([
         ...sessions.map(s => s.date),
         ...foodEntries.map(f => f.date),
-        ...journalEntries.map(j => j.date)
+        ...journalEntries.map(j => j.date),
+        ...bodyMetrics.map(b => b.date)
       ])].sort();
 
-      dates.forEach(dateStr => {
+      // Generate full date range to detect missing days
+      const allDatesInRange = [];
+      let current = parseISO(dateRange.from);
+      const end = parseISO(dateRange.to);
+      while (current <= end) {
+        allDatesInRange.push(format(current, 'yyyy-MM-dd'));
+        current = new Date(current.getTime() + 86400000);
+      }
+
+      allDatesInRange.forEach(dateStr => {
         const daySessions = sessions.filter(s => s.date === dateStr);
         const dayFood = foodEntries.filter(f => f.date === dateStr);
         const dayJournal = journalEntries.find(j => j.date === dateStr);
+        const dayBody = bodyMetrics.find(b => b.date === dateStr);
+        const dayOura = ouraData?.find(o => o.date === dateStr);
+        const dayPhotos = photos?.filter(p => p.date === dateStr);
 
-        if (daySessions.length === 0 && dayFood.length === 0 && !dayJournal) return;
+        // If nothing was done and no Power List, mark as lost
+        if (daySessions.length === 0 && dayFood.length === 0 && !dayJournal && !dayBody && !dayOura && (!dayPhotos || dayPhotos.length === 0)) {
+          md += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n`;
+          md += `### ❌ DZIEŃ PRZEGRANY (Brak Celu)\n`;
+          md += `*„Jeśli nie wypełniłem nawet nie dodałem pięciu zadań jakie są do zrobienia... to i tak wziąć się zalicza jako przegrany bo po prostu no nie zrobiłem niczego w kierunku swoich własnych marzeń więc tak naprawdę żyłem dzisiaj bez celu.”*\n\n`;
+          md += `---\n\n`;
+          return;
+        }
 
         md += `## ${format(parseISO(dateStr), 'd MMMM yyyy (EEEE)', { locale: pl })}\n\n`;
+
+        if (dayOura) {
+          md += `### 💍 Oura Ring\n`;
+          md += `- **Readiness:** ${dayOura.readiness_score || '--'}\n`;
+          md += `- **Sen:** ${dayOura.total_sleep_hours || '--'}h\n`;
+          md += `- **Kroki:** ${dayOura.steps || '--'}\n`;
+          md += `- **Dyscyplina:** ${dayOura.is_disciplined ? 'TAK' : 'NIE'}\n\n`;
+        }
+
+        if (dayPhotos && dayPhotos.length > 0) {
+          md += `### 📸 Zdjęcia Postępu\n`;
+          dayPhotos.forEach((p, idx) => {
+            md += `![Zdjęcie ${idx + 1}](${p.image_url})\n`;
+          });
+          md += `\n`;
+        }
+
+
+        if (dayBody) {
+          md += `### ⚖️ Pomiary Ciała\n`;
+          if (dayBody.weight) md += `- **Waga:** ${dayBody.weight} kg\n`;
+          if (dayBody.weight_italia) md += `- **Waga Italii:** ${dayBody.weight_italia} kg\n`;
+          if (dayBody.waist) md += `- **Talia:** ${dayBody.waist} cm\n`;
+          
+          const extraMetrics = {
+            neck: 'Szyja', chest: 'Klatka', hips: 'Biodra', belly: 'Brzuch',
+            biceps_l: 'Biceps (L)', biceps_r: 'Biceps (P)', forearm: 'Przedramię',
+            thigh: 'Udo', calf: 'Łydka'
+          };
+          
+          Object.entries(extraMetrics).forEach(([key, label]) => {
+            if (dayBody[key]) md += `- **${label}:** ${dayBody[key]} cm\n`;
+          });
+          md += `\n`;
+        }
 
         daySessions.forEach(s => {
           md += `### 🏋️ Trening: Dzień ${s.workout_day}\n`;
@@ -316,6 +423,10 @@ export default function Stats({ session }) {
             <div className="space-y-1.5">
               <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Talia (cm)</label>
               <input type="number" step="0.1" value={newMetric.waist} onChange={e => setNewMetric({...newMetric, waist: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Waga Italii (kg)</label>
+              <input type="number" step="0.1" value={newMetric.weight_italia} onChange={e => setNewMetric({...newMetric, weight_italia: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />
             </div>
           </div>
           <button onClick={saveMetrics} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest">Zapisz Pomiary</button>
@@ -476,6 +587,29 @@ export default function Stats({ session }) {
           <button onClick={exportData} disabled={isExporting} className="bg-primary text-white px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20 flex-1 ml-4">
             {isExporting ? 'Generowanie...' : 'Pobierz Raport (.md)'}
           </button>
+        </div>
+
+        <div className="pt-6 border-t border-primary/10 space-y-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${googleFitConnected ? 'bg-dayC animate-pulse' : 'bg-neutral-800'}`} />
+              <span className="text-[10px] font-black uppercase text-white">Google Fit (Waga)</span>
+            </div>
+            {googleFitConnected ? (
+              <button onClick={syncGoogleFit} disabled={isSyncingFit} className="text-[8px] font-black uppercase text-primary hover:underline">
+                {isSyncingFit ? 'Syncing...' : 'Sync Teraz'}
+              </button>
+            ) : (
+              <button onClick={connectGoogleFit} className="bg-white text-black px-4 py-2 rounded-lg text-[8px] font-black uppercase hover:bg-primary hover:text-white transition-all">
+                Połącz Google Fit
+              </button>
+            )}
+          </div>
+          {!googleFitConnected && (
+            <p className="text-[7px] text-neutral-600 uppercase font-bold leading-tight">
+              Automatyczny import wagi z Twojej inteligentnej wagi przez Google Fit.
+            </p>
+          )}
         </div>
       </section>
     </div>
