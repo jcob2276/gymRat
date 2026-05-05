@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -21,15 +23,8 @@ serve(async (req) => {
     )
 
     // 1. Get credentials
-    const { data: settings, error: settingsError } = await supabaseClient
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
-
-    if (settingsError || !settings.google_fit_refresh_token) {
-      throw new Error('Google Fit nie jest połączony')
-    }
+    const { data: settings } = await supabaseClient.from('user_settings').select('*').eq('user_id', userId).single()
+    if (!settings?.google_fit_refresh_token) throw new Error('Google Fit nie jest połączony')
 
     // 2. Refresh Access Token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -45,35 +40,25 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    if (!accessToken) throw new Error('Nie udało się odświeżyć tokena Google')
-
     const endTimeNanos = BigInt(Date.now()) * BigInt(1000000)
     const startTimeNanos = endTimeNanos - (BigInt(30 * 24 * 60 * 60) * BigInt(1000000000))
 
-    // 3. Sync Body Metrics (Weight, Fat etc)
+    // 3. Sync Body Metrics
     const dataTypes = [
       { id: "derived:com.google.weight:com.google.android.gms:merge_weight", field: 'weight' },
-      { id: "derived:com.google.body.fat.percentage:com.google.android.gms:merged", field: 'body_fat' },
-      { id: "derived:com.google.body.muscle_mass:com.google.android.gms:merged", field: 'muscle_mass' },
-      { id: "derived:com.google.body.bone_mass:com.google.android.gms:merged", field: 'bone_mass' },
-      { id: "derived:com.google.body.water.percentage:com.google.android.gms:merged", field: 'body_water' }
+      { id: "derived:com.google.body.fat.percentage:com.google.android.gms:merged", field: 'body_fat' }
     ]
 
     const dayData: Record<string, any> = {}
-
     for (const dt of dataTypes) {
-      const datasetId = `${startTimeNanos}-${endTimeNanos}`
-      const response = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dt.id}/datasets/${datasetId}`,
-        { headers: { 'Authorization': `Bearer ${accessToken}` } }
-      )
-      
+      const response = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${dt.id}/datasets/${startTimeNanos}-${endTimeNanos}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
       const data = await response.json()
       if (data.point) {
         for (const point of data.point) {
           const date = new Date(parseInt(point.startTimeNanos) / 1000000).toISOString().split('T')[0]
           const value = point.value[0]?.fpVal || point.value[0]?.intVal
-
           if (value) {
             if (!dayData[date]) dayData[date] = { user_id: userId, date }
             dayData[date][dt.field] = Math.round(value * 10) / 10
@@ -81,48 +66,56 @@ serve(async (req) => {
         }
       }
     }
-
-    // Save metrics
     const entries = Object.values(dayData)
     for (const entry of entries) {
       await supabaseClient.from('body_metrics').upsert(entry, { onConflict: 'user_id,date' })
     }
 
-    // 4. Sync Location History (Last 7 days to keep it fast)
+    // 4. Sync Location & SMART TAGGING
     const startTimeNanosLoc = endTimeNanos - (BigInt(7 * 24 * 60 * 60) * BigInt(1000000000))
     const locationStream = "derived:com.google.location.sample:com.google.android.gms:merge_location_samples"
-    const locDatasetId = `${startTimeNanosLoc}-${endTimeNanos}`
     
-    const locResponse = await fetch(
-      `https://www.googleapis.com/fitness/v1/users/me/dataSources/${locationStream}/datasets/${locDatasetId}`,
-      { headers: { 'Authorization': `Bearer ${accessToken}` } }
-    )
+    const locResponse = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${locationStream}/datasets/${startTimeNanosLoc}-${endTimeNanos}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
     const locData = await locResponse.json()
     
     let syncedLocations = 0
     if (locData.point) {
-      const locEntries = locData.point.map((p: any) => ({
-        user_id: userId,
-        created_at: new Date(parseInt(p.startTimeNanos) / 1000000).toISOString(),
-        latitude: p.value[0].fpVal,
-        longitude: p.value[1].fpVal,
-        accuracy: p.value[2].fpVal
-      }))
-      
-      if (locEntries.length > 0) {
-        const { error: locError } = await supabaseClient
-          .from('location_history')
-          .upsert(locEntries, { onConflict: 'user_id,created_at' })
+      // Sample points to avoid hitting API limits (every 10th point or if big distance)
+      const points = locData.point.filter((_: any, idx: number) => idx % 5 === 0); 
+
+      for (const p of points) {
+        const lat = p.value[0].fpVal;
+        const lng = p.value[1].fpVal;
+        const timestamp = new Date(parseInt(p.startTimeNanos) / 1000000).toISOString();
         
-        if (!locError) syncedLocations = locEntries.length
+        let placeName = null;
+
+        // Smart Tagging with Google Maps API
+        if (MAPS_API_KEY) {
+          const placesResp = await fetch(
+            `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=50&type=gym&key=${MAPS_API_KEY}`
+          );
+          const placesData = await placesResp.json();
+          if (placesData.results && placesData.results.length > 0) {
+            placeName = placesData.results[0].name; // Np. "CityFit Rondo ONZ"
+          }
+        }
+
+        await supabaseClient.from('location_history').upsert({
+          user_id: userId,
+          created_at: timestamp,
+          latitude: lat,
+          longitude: lng,
+          accuracy: p.value[2].fpVal,
+          place_name: placeName
+        }, { onConflict: 'user_id,created_at' });
+        syncedLocations++;
       }
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      synced_days: entries.length,
-      synced_locations: syncedLocations
-    }), {
+    return new Response(JSON.stringify({ success: true, synced_locations: syncedLocations }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 

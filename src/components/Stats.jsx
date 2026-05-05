@@ -330,11 +330,20 @@ export default function Stats({ session }) {
         const visitedPOIs = POIs.filter(poi => 
           dayLocations?.some(loc => getDistance(loc.latitude, loc.longitude, poi.lat, poi.lng) < poi.radius)
         );
+        
+        // Wykryte inteligentnie przez API Google Maps
+        const detectedPlaces = [...new Set(dayLocations?.filter(l => l.place_name).map(l => l.place_name))];
 
-        if (visitedPOIs.length > 0) {
+        if (visitedPOIs.length > 0 || detectedPlaces.length > 0) {
           md += `### 📍 Potwierdzone Lokalizacje\n`;
           visitedPOIs.forEach(poi => {
             md += `- ✅ Obecność w: **${poi.name}**\n`;
+          });
+          detectedPlaces.forEach(place => {
+            // Unikaj dublowania jeśli nazwa POI i PlaceName są podobne
+            if (!visitedPOIs.some(p => p.name === place)) {
+              md += `- 🤖 Wykryto: **${place}**\n`;
+            }
           });
           md += `\n`;
         }
