@@ -552,17 +552,37 @@ export default function Stats({ session }) {
         </div>
       </section>
 
-      <section className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-4">
-        <h3 className="text-xs font-black uppercase text-primary">Eksportuj Raport</h3>
-        
-        <div className="grid grid-cols-2 gap-3">
+      <section className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 space-y-8 shadow-2xl shadow-black/50">
+        <div className="flex justify-between items-start">
           <div className="space-y-1">
-            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Od</label>
-            <input type="date" value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none" />
+            <h3 className="text-xl font-black uppercase italic text-white tracking-tighter italic">Eksportuj Raport</h3>
+            <p className="text-[8px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Wybierz zakres i format danych</p>
           </div>
-          <div className="space-y-1">
-            <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Do</label>
-            <input type="date" value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none" />
+          <FileText className="text-primary/20" size={32} />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+              <Clock size={12} className="text-primary" /> Od (Data Początkowa)
+            </label>
+            <input 
+              type="date" 
+              value={dateRange.from} 
+              onChange={e => setDateRange({...dateRange, from: e.target.value})} 
+              className="w-full bg-neutral-950 border-2 border-neutral-800 rounded-2xl p-4 text-sm font-black text-white outline-none focus:border-primary transition-all hover:border-neutral-700 invert-[0.9] hue-rotate-180" 
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+              <Clock size={12} className="text-primary" /> Do (Data Końcowa)
+            </label>
+            <input 
+              type="date" 
+              value={dateRange.to} 
+              onChange={e => setDateRange({...dateRange, to: e.target.value})} 
+              className="w-full bg-neutral-950 border-2 border-neutral-800 rounded-2xl p-4 text-sm font-black text-white outline-none focus:border-primary transition-all hover:border-neutral-700 invert-[0.9] hue-rotate-180" 
+            />
           </div>
         </div>
 
