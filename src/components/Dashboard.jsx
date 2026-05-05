@@ -6,10 +6,13 @@ import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
 import Photos from './Photos';
 import Direction from './Direction';
+import Fundament from './Fundament';
 import OuraWidget from './OuraWidget';
 import LocationTracker from './LocationTracker';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useStore } from '../store/useStore';
+import { format, parseISO } from 'date-fns';
+import { Fingerprint, LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield, RotateCw, MapPin } from 'lucide-react';
 
 export default function Dashboard({ session }) {
   const [view, setView] = useState('workout');
@@ -18,6 +21,17 @@ export default function Dashboard({ session }) {
   const { mspFeedbackMap, lastDayASession, weeklyCalories, todayWin, syncYazio, loading } = useDashboardData();
   const { isSyncing } = useStore();
   const weeklyBudget = 12600; // 1800 * 7
+
+  if (view === 'fundament') return <Fundament onBack={() => setView('workout')} />;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <p className="text-[10px] font-black text-primary uppercase tracking-widest animate-pulse">Ładowanie danych...</p>
+      </div>
+    );
+  }
 
   if (selectedDay) {
     return <WorkoutExecution dayKey={selectedDay} session={session} onBack={() => setSelectedDay(null)} />;
@@ -52,9 +66,14 @@ export default function Dashboard({ session }) {
           <h1 className="font-black text-xl text-white uppercase tracking-tighter italic">Kuba Tracker V2.1</h1>
           <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{session.user.email}</p>
         </div>
-        <button onClick={() => supabase.auth.signOut()} className="p-2 text-neutral-500 hover:text-white transition-colors">
-          <LogOut size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setView('fundament')} className="p-2 text-primary hover:text-white transition-colors">
+            <Fingerprint size={20} />
+          </button>
+          <button onClick={() => supabase.auth.signOut()} className="p-2 text-neutral-500 hover:text-white transition-colors">
+            <LogOut size={20} />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">
@@ -72,7 +91,7 @@ export default function Dashboard({ session }) {
                   <button onClick={() => setView('direction')} className="text-[10px] font-black text-primary uppercase hover:underline">Szczegóły</button>
                 </div>
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-2">
-                  {[1,2,3,4,5].map(i => {
+                  {todayWin && [1,2,3,4,5].map(i => {
                     const task = todayWin[`task_${i}`];
                     const done = todayWin[`done_${i}`];
                     if (!task) return null;

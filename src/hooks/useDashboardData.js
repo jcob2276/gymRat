@@ -16,19 +16,33 @@ export function useDashboardData() {
   const fetchData = useCallback(async () => {
     if (!session) return;
     
-    const { data: sessions } = await supabase
-      .from('workout_sessions')
-      .select('*, exercise_logs(*)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
+    try {
+      const { data: sessions } = await supabase
+        .from('workout_sessions')
+        .select('*, exercise_logs(*)')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
 
-    if (sessions) {
       const feedbackMap = {};
-      sessions.forEach(s => {
-        if (feedbackMap[s.workout_day] === undefined) {
-          feedbackMap[s.workout_day] = s.msp_passed;
+      let totalCal = 0;
+      let lastA = null;
+      let todayData = null;
+
+      if (sessions && sessions.length > 0) {
+        sessions.forEach(s => {
+          if (feedbackMap[s.workout_day] === undefined) {
+            feedbackMap[s.workout_day] = s.msp_passed;
+          }
+        });
+
+        const lastAEntry = sessions.find(s => s.workout_day === 'A');
+        if (lastAEntry) {
+          lastA = {
+            ...lastAEntry,
+            benchLogs: lastAEntry.exercise_logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie'))
+          };
         }
-      });
+      }
 
       const monday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const { data: nutrition } = await supabase
@@ -36,21 +50,18 @@ export function useDashboardData() {
         .select('calories')
         .gte('date', monday);
       
-      const totalCal = nutrition?.reduce((sum, n) => sum + (n.calories || 0), 0) || 0;
-
-      const lastA = sessions.find(s => s.workout_day === 'A');
-      if (lastA) {
-        lastA.benchLogs = lastA.exercise_logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie'));
-      }
+      totalCal = nutrition?.reduce((sum, n) => sum + (n.calories || 0), 0) || 0;
 
       const today = format(new Date(), 'yyyy-MM-dd');
-      const { data: todayData } = await supabase
+      const { data: tData } = await supabase
         .from('daily_wins')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('date', today)
         .single();
       
+      todayData = tData;
+
       setData({
         mspFeedbackMap: feedbackMap,
         lastDayASession: lastA,
@@ -58,6 +69,9 @@ export function useDashboardData() {
         todayWin: todayData,
         loading: false
       });
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setData(prev => ({ ...prev, loading: false }));
     }
   }, [session]);
 

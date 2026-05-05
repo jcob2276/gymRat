@@ -246,7 +246,19 @@ export default function Stats({ session }) {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       }
 
-      let md = `# RAPORT TRENINGOWY KUBA\n`;
+      const { data: fundament } = await supabase.from('user_fundament').select('*').eq('user_id', session.user.id).single();
+
+      let md = `# ROZDZIAŁ 0: FUNDAMENT TOŻSAMOŚCI I WIZJA\n\n`;
+      if (fundament) {
+        md += `## 1. TOŻSAMOŚĆ\n${fundament.identity || 'Brak wpisów.'}\n\n`;
+        md += `## 2. WARTOŚCI I FILOZOFIA\n${fundament.philosophy || 'Brak wpisów.'}\n\n`;
+        md += `## 3. WIZJA\n${fundament.vision || 'Brak wpisów.'}\n\n`;
+        md += `## 4. PRACA I FINANSE\n${fundament.finances || 'Brak wpisów.'}\n\n`;
+        md += `## 5. WIEDZA\n${fundament.knowledge || 'Brak wpisów.'}\n\n`;
+        md += `## 6. RELACJE\n${fundament.relationships || 'Brak wpisów.'}\n\n`;
+      }
+      md += `---\n\n`;
+      md += `# RAPORT TRENINGOWY I LIFESTYLE\n`;
       // ... rest of the setup
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
 
