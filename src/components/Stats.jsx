@@ -13,7 +13,7 @@ export default function Stats({ session }) {
   const [loading, setLoading] = useState(true);
   const [bodyData, setBodyData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
-  const [newMetric, setNewMetric] = useState({ weight: '', waist: '', weight_italia: '' });
+  const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
   const [ouraTrend, setOuraTrend] = useState([]);
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
@@ -91,8 +91,7 @@ export default function Stats({ session }) {
       user_id: session.user.id,
       date: today,
       weight: newMetric.weight ? parseFloat(newMetric.weight) : null,
-      waist: newMetric.waist ? parseFloat(newMetric.waist) : null,
-      weight_italia: newMetric.weight_italia ? parseFloat(newMetric.weight_italia) : null
+      waist: newMetric.waist ? parseFloat(newMetric.waist) : null
     });
     if (error) alert(error.message);
     else { alert('Zapisano!'); fetchStats(); }
@@ -297,7 +296,6 @@ export default function Stats({ session }) {
         if (dayBody) {
           md += `### ⚖️ Pomiary Ciała\n`;
           if (dayBody.weight) md += `- **Waga:** ${dayBody.weight} kg\n`;
-          if (dayBody.weight_italia) md += `- **Waga Italii:** ${dayBody.weight_italia} kg\n`;
           if (dayBody.waist) md += `- **Talia:** ${dayBody.waist} cm\n`;
           
           const extraMetrics = {
@@ -423,10 +421,6 @@ export default function Stats({ session }) {
             <div className="space-y-1.5">
               <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Talia (cm)</label>
               <input type="number" step="0.1" value={newMetric.waist} onChange={e => setNewMetric({...newMetric, waist: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Waga Italii (kg)</label>
-              <input type="number" step="0.1" value={newMetric.weight_italia} onChange={e => setNewMetric({...newMetric, weight_italia: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />
             </div>
           </div>
           <button onClick={saveMetrics} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest">Zapisz Pomiary</button>
