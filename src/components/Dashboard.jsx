@@ -8,96 +8,16 @@ import Photos from './Photos';
 import Direction from './Direction';
 import OuraWidget from './OuraWidget';
 import LocationTracker from './LocationTracker';
-import { format, parseISO, startOfWeek } from 'date-fns';
+import { useDashboardData } from '../hooks/useDashboardData';
+import { useStore } from '../store/useStore';
 
 export default function Dashboard({ session }) {
   const [view, setView] = useState('workout');
   const [selectedDay, setSelectedDay] = useState(null);
-  const [mspFeedbackMap, setMspFeedbackMap] = useState({});
-  const [lastDayASession, setLastDayASession] = useState(null);
   const [showProgression, setShowProgression] = useState(false);
-  const [weeklyCalories, setWeeklyCalories] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [todayWin, setTodayWin] = useState(null);
+  const { mspFeedbackMap, lastDayASession, weeklyCalories, todayWin, syncYazio, loading } = useDashboardData();
+  const { isSyncing } = useStore();
   const weeklyBudget = 12600; // 1800 * 7
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  async function fetchDashboardData() {
-    // Fetch MSP feedback
-    const { data: sessions } = await supabase
-      .from('workout_sessions')
-      .select('*, exercise_logs(*)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
-
-    if (sessions) {
-      const feedbackMap = {};
-      sessions.forEach(s => {
-        if (feedbackMap[s.workout_day] === undefined) {
-          feedbackMap[s.workout_day] = s.msp_passed;
-        }
-      });
-      setMspFeedbackMap(feedbackMap);
-
-      // Fetch Weekly Calories (reset on Monday)
-      const monday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const { data: nutrition } = await supabase
-        .from('daily_nutrition')
-        .select('calories')
-        .gte('date', monday);
-      
-      if (nutrition) {
-        const total = nutrition.reduce((sum, n) => sum + (n.calories || 0), 0);
-        setWeeklyCalories(total);
-      }
-
-      // Find last Day A for the summary widget
-      const lastA = sessions.find(s => s.workout_day === 'A');
-      if (lastA) {
-        const benchLogs = lastA.exercise_logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie'));
-        setLastDayASession({ ...lastA, benchLogs });
-      }
-
-      // Fetch Today's Power List
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const { data: todayData } = await supabase
-        .from('daily_wins')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('date', today)
-        .single();
-      
-      setTodayWin(todayData);
-    }
-  }
-
-  async function syncYazio() {
-    setIsSyncing(true);
-    try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-yazio`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authSession.access_token}`
-        },
-        body: JSON.stringify({ userId: session.user.id })
-      });
-      const res = await response.json();
-      if (res.success) {
-        fetchDashboardData();
-      } else {
-        alert('Błąd synchronizacji: ' + res.error);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSyncing(false);
-    }
-  }
 
   if (selectedDay) {
     return <WorkoutExecution dayKey={selectedDay} session={session} onBack={() => setSelectedDay(null)} />;

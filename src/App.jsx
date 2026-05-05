@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import { useStore } from './store/useStore';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 
 function App() {
-  const [session, setSession] = useState(null);
+  const { session, setSession } = useStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,7 +23,7 @@ function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [setSession]);
 
   if (loading) {
     return (
