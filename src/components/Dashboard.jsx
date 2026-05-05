@@ -17,6 +17,7 @@ export default function Dashboard({ session }) {
   const [showProgression, setShowProgression] = useState(false);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [todayWin, setTodayWin] = useState(null);
   const weeklyBudget = 12600; // 1800 * 7
 
   useEffect(() => {
@@ -58,6 +59,17 @@ export default function Dashboard({ session }) {
         const benchLogs = lastA.exercise_logs.filter(l => l.exercise_name.includes('Wyciskanie płaskie'));
         setLastDayASession({ ...lastA, benchLogs });
       }
+
+      // Fetch Today's Power List
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data: todayData } = await supabase
+        .from('daily_wins')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('date', today)
+        .single();
+      
+      setTodayWin(todayData);
     }
   }
 
@@ -127,6 +139,35 @@ export default function Dashboard({ session }) {
         {view === 'workout' && (
           <div className="p-6 space-y-8">
             <OuraWidget session={session} />
+
+            {/* Power List Today - Quick View */}
+            {todayWin && (
+              <section className="space-y-3">
+                <div className="flex justify-between items-center px-1">
+                  <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+                    <Compass size={12} className="text-primary" /> Power List na Dziś
+                  </h3>
+                  <button onClick={() => setView('direction')} className="text-[10px] font-black text-primary uppercase hover:underline">Szczegóły</button>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-2">
+                  {[1,2,3,4,5].map(i => {
+                    const task = todayWin[`task_${i}`];
+                    const done = todayWin[`done_${i}`];
+                    if (!task) return null;
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${done ? 'bg-dayC border-dayC text-white' : 'border-neutral-700 text-transparent'}`}>
+                          {done && <Trophy size={10} />}
+                        </div>
+                        <p className={`text-[11px] font-bold uppercase italic transition-all ${done ? 'text-neutral-600 line-through' : 'text-white'}`}>
+                          {task}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* Weekly Calorie Budget */}
             <section className="card bg-neutral-900 border-neutral-800 p-5 space-y-4">

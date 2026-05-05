@@ -22,6 +22,8 @@ export default function Direction({ session }) {
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const [newHabit, setNewHabit] = useState({ name: '', icon: '💪', is_positive: true });
   const [isSavingJournal, setIsSavingJournal] = useState(false);
+  const [tomorrowWin, setTomorrowWin] = useState(null);
+  const [isPlanningTomorrow, setIsPlanningTomorrow] = useState(false);
   const [currentReview, setCurrentReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({ proud_of: '', sabotage: '', do_differently: '' });
   const isSunday = new Date().getDay() === 0;
@@ -55,6 +57,17 @@ export default function Direction({ session }) {
       .single();
     
     setTodayWin(todayData);
+
+    // Fetch Tomorrow's Win
+    const tomorrow = format(subDays(new Date(), -1), 'yyyy-MM-dd');
+    const { data: tomorrowData } = await supabase
+      .from('daily_wins')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('date', tomorrow)
+      .single();
+    
+    setTomorrowWin(tomorrowData);
 
     // Fetch History (last 60 days for stats)
     const { data: historyData } = await supabase
@@ -155,8 +168,50 @@ export default function Direction({ session }) {
     };
 
     const { data, error } = await supabase.from('daily_wins').insert(entry).select().single();
-    if (!error) setTodayWin(data);
+    if (!error) {
+      setTodayWin(data);
+      setNewTaskForm([
+        { task: '', category: 'cialo' },
+        { task: '', category: 'duch' },
+        { task: '', category: 'konto' },
+        { task: '', category: 'cialo' },
+        { task: '', category: 'duch' },
+      ]);
+    }
     else alert('Błąd startu dnia');
+  }
+
+  async function planTomorrow() {
+    if (newTaskForm.some(t => !t.task.trim())) {
+      alert('Wypełnij wszystkie 5 zadań na jutro!');
+      return;
+    }
+
+    const tomorrow = format(subDays(new Date(), -1), 'yyyy-MM-dd');
+    const entry = {
+      user_id: session.user.id,
+      date: tomorrow,
+      task_1: newTaskForm[0].task, category_1: newTaskForm[0].category,
+      task_2: newTaskForm[1].task, category_2: newTaskForm[1].category,
+      task_3: newTaskForm[2].task, category_3: newTaskForm[2].category,
+      task_4: newTaskForm[3].task, category_4: newTaskForm[3].category,
+      task_5: newTaskForm[4].task, category_5: newTaskForm[4].category,
+      result: null
+    };
+
+    const { data, error } = await supabase.from('daily_wins').insert(entry).select().single();
+    if (!error) {
+      setTomorrowWin(data);
+      setIsPlanningTomorrow(false);
+      setNewTaskForm([
+        { task: '', category: 'cialo' },
+        { task: '', category: 'duch' },
+        { task: '', category: 'konto' },
+        { task: '', category: 'cialo' },
+        { task: '', category: 'duch' },
+      ]);
+    }
+    else alert('Błąd planowania jutra');
   }
 
   async function toggleTask(index) {
@@ -444,7 +499,7 @@ export default function Direction({ session }) {
         </header>
 
         {!todayWin ? (
-          /* Formularz Nowego Dnia */
+          /* Formularz Nowego Dnia (Dziś) */
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
             <h3 className="text-[10px] font-black text-white uppercase tracking-widest text-center">Zdefiniuj 5 Zwycięstw na Dziś</h3>
             <div className="space-y-4">
@@ -473,11 +528,15 @@ export default function Direction({ session }) {
               ))}
             </div>
             <button onClick={startNewDay} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-xl shadow-primary/20">Zatwierdź Listę</button>
-            <p className="text-[8px] text-neutral-500 font-bold uppercase text-center italic">Po zatwierdzeniu nie będziesz mógł zmienić treści zadań.</p>
+            <p className="text-[8px] text-neutral-500 font-bold uppercase text-center italic mt-2">Zaplanuj dzisiaj rano po raz ostatni – od jutra będziesz już tylko egzekwować.</p>
           </div>
         ) : (
-          /* Lista Zadań */
+          /* Dzisiejsza Lista */
           <div className="space-y-3">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Dzisiejsza Egzekucja</span>
+              <span className="text-[8px] font-black text-neutral-600 uppercase">{format(new Date(), 'dd.MM')}</span>
+            </div>
             {[0,1,2,3,4].map((i) => {
               const task = todayWin[`task_${i+1}`];
               const category = todayWin[`category_${i+1}`];
@@ -510,6 +569,67 @@ export default function Direction({ session }) {
                 </button>
               );
             })}
+            {/* JUTRO - Pojawia się tylko gdy dzisiejsza lista jest aktywna */}
+            <div className="pt-4 border-t border-neutral-900 space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Zap size={12} /> Plan na Jutro
+                </h3>
+              </div>
+
+              {tomorrowWin ? (
+                <div className="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-4 space-y-2 opacity-60">
+                    {/* Mini preview jutra */}
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-neutral-700" />
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase italic">{tomorrowWin[`task_${i}`]}</p>
+                      </div>
+                    ))}
+                </div>
+              ) : isPlanningTomorrow ? (
+                <div className="bg-neutral-900 border border-primary/50 rounded-2xl p-6 space-y-6 animate-in slide-in-from-bottom-2">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-[10px] font-black text-white uppercase tracking-widest">5 Zwycięstw na JUTRO</h3>
+                    <button onClick={() => setIsPlanningTomorrow(false)} className="text-neutral-500"><X size={16} /></button>
+                  </div>
+                  <div className="space-y-4">
+                    {newTaskForm.map((t, i) => (
+                      <div key={i} className="flex gap-2">
+                        <select 
+                          value={t.category}
+                          onChange={(e) => {
+                            const n = [...newTaskForm]; n[i].category = e.target.value; setNewTaskForm(n);
+                          }}
+                          className="bg-neutral-950 border border-neutral-800 rounded-xl px-2 text-[10px] font-black text-primary outline-none uppercase"
+                        >
+                          <option value="cialo">Ciało</option>
+                          <option value="duch">Duch</option>
+                          <option value="konto">Konto</option>
+                        </select>
+                        <input 
+                          placeholder={`Zadanie ${i+1}`}
+                          value={t.task}
+                          onChange={(e) => {
+                            const n = [...newTaskForm]; n[i].task = e.target.value; setNewTaskForm(n);
+                          }}
+                          className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[12px] font-bold text-white outline-none focus:border-primary placeholder:text-neutral-700"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={planTomorrow} className="w-full bg-primary text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20">Zatwierdź Plan na Jutro</button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setIsPlanningTomorrow(true)}
+                  className="w-full bg-neutral-900 border border-neutral-800 p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-neutral-800 transition-all group"
+                >
+                  <Plus size={14} className="text-primary" />
+                  <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-white">Zaplanuj Jutrzejszy Dzień</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </section>
@@ -686,7 +806,7 @@ export default function Direction({ session }) {
                   <span className="animate-pulse">Zapisywanie...</span>
                 ) : (
                   <>
-                    <Save size={14} /> Dodaj Wpis
+                    <Save size={14} /> Zapisz Refleksję
                   </>
                 )}
               </button>

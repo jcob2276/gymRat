@@ -547,8 +547,26 @@ export default function Stats({ session }) {
 
       <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
         <div className="grid grid-cols-2 gap-4">
-          <input type="date" value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none invert-[0.9] hue-rotate-180" />
-          <input type="date" value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none invert-[0.9] hue-rotate-180" />
+          <div className="relative group">
+            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-hover:text-primary transition-colors" size={14} />
+            <input 
+              type="date" 
+              value={dateRange.from} 
+              onClick={(e) => e.target.showPicker && e.target.showPicker()}
+              onChange={e => setDateRange({...dateRange, from: e.target.value})} 
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 pl-10 text-[10px] font-bold text-white outline-none focus:border-primary transition-all cursor-pointer appearance-none" 
+            />
+          </div>
+          <div className="relative group">
+            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 group-hover:text-primary transition-colors" size={14} />
+            <input 
+              type="date" 
+              value={dateRange.to} 
+              onClick={(e) => e.target.showPicker && e.target.showPicker()}
+              onChange={e => setDateRange({...dateRange, to: e.target.value})} 
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 pl-10 text-[10px] font-bold text-white outline-none focus:border-primary transition-all cursor-pointer appearance-none" 
+            />
+          </div>
         </div>
 
         <div className="flex gap-4">
