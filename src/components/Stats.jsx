@@ -135,7 +135,7 @@ export default function Stats({ session }) {
       return;
     }
     const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-fit-auth`;
-    const scope = 'https://www.googleapis.com/auth/fitness.body.read';
+    const scope = 'https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.location.read';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleFitConfig.id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
     
     window.open(authUrl, '_blank', 'width=600,height=600');
@@ -229,9 +229,25 @@ export default function Stats({ session }) {
       const { data: habitLogs } = await supabase.from('habit_logs').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
       const { data: ouraData } = await supabase.from('oura_daily_summary').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
       const { data: photos } = await supabase.from('progress_photos').select('*').eq('user_id', session.user.id).gte('date', dateRange.from).lte('date', dateRange.to);
+      const { data: locationHistory } = await supabase.from('location_history').select('*').eq('user_id', session.user.id).gte('created_at', dateRange.from).lte('created_at', dateRange.to + 'T23:59:59');
 
+      const POIs = [
+        { name: 'Siłownia', lat: 52.2297, lng: 21.0122, radius: 250 }, // PRZYKŁAD: Wpisz tu swoje współrzędne
+        { name: 'Dom', lat: 52.2396, lng: 21.0122, radius: 100 }
+      ];
+
+      function getDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
 
       let md = `# RAPORT TRENINGOWY KUBA\n`;
+      // ... rest of the setup
       md += `Okres: ${dateRange.from} do ${dateRange.to}\n\n`;
 
       if (goals) {
@@ -306,6 +322,19 @@ export default function Stats({ session }) {
           
           Object.entries(extraMetrics).forEach(([key, label]) => {
             if (dayBody[key]) md += `- **${label}:** ${dayBody[key]} cm\n`;
+          });
+          md += `\n`;
+        }
+
+        const dayLocations = locationHistory?.filter(l => l.created_at.startsWith(dateStr));
+        const visitedPOIs = POIs.filter(poi => 
+          dayLocations?.some(loc => getDistance(loc.latitude, loc.longitude, poi.lat, poi.lng) < poi.radius)
+        );
+
+        if (visitedPOIs.length > 0) {
+          md += `### 📍 Potwierdzone Lokalizacje\n`;
+          visitedPOIs.forEach(poi => {
+            md += `- ✅ Obecność w: **${poi.name}**\n`;
           });
           md += `\n`;
         }

@@ -31,7 +31,7 @@ serve(async (req) => {
       throw new Error('Google Fit nie jest połączony')
     }
 
-    // 2. Get Access Token (Logic remains the same...)
+    // 2. Refresh Access Token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -45,18 +45,12 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    // 3. List Data Sources (Debugging)
-    const sourcesResponse = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    })
-    const sourcesData = await sourcesResponse.json()
-    const weightSources = sourcesData.dataSource?.filter((s: any) => 
-      s.dataType.name.includes('weight') || s.dataType.name.includes('body')
-    ).map((s: any) => s.dataStreamId)
+    if (!accessToken) throw new Error('Nie udało się odświeżyć tokena Google')
 
     const endTimeNanos = BigInt(Date.now()) * BigInt(1000000)
     const startTimeNanos = endTimeNanos - (BigInt(30 * 24 * 60 * 60) * BigInt(1000000000))
 
+    // 3. Sync Body Metrics (Weight, Fat etc)
     const dataTypes = [
       { id: "derived:com.google.weight:com.google.android.gms:merge_weight", field: 'weight' },
       { id: "derived:com.google.body.fat.percentage:com.google.android.gms:merged", field: 'body_fat' },
@@ -65,16 +59,13 @@ serve(async (req) => {
       { id: "derived:com.google.body.water.percentage:com.google.android.gms:merged", field: 'body_water' }
     ]
 
-    let syncedCount = 0
     const dayData: Record<string, any> = {}
 
     for (const dt of dataTypes) {
       const datasetId = `${startTimeNanos}-${endTimeNanos}`
       const response = await fetch(
         `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dt.id}/datasets/${datasetId}`,
-        {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        }
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
       )
       
       const data = await response.json()
@@ -91,22 +82,47 @@ serve(async (req) => {
       }
     }
 
-    // 4. Save to DB
+    // Save metrics
     const entries = Object.values(dayData)
     for (const entry of entries) {
       await supabaseClient.from('body_metrics').upsert(entry, { onConflict: 'user_id,date' })
-      syncedCount++
+    }
+
+    // 4. Sync Location History (Last 7 days to keep it fast)
+    const startTimeNanosLoc = endTimeNanos - (BigInt(7 * 24 * 60 * 60) * BigInt(1000000000))
+    const locationStream = "derived:com.google.location.sample:com.google.android.gms:merge_location_samples"
+    const locDatasetId = `${startTimeNanosLoc}-${endTimeNanos}`
+    
+    const locResponse = await fetch(
+      `https://www.googleapis.com/fitness/v1/users/me/dataSources/${locationStream}/datasets/${locDatasetId}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    )
+    const locData = await locResponse.json()
+    
+    let syncedLocations = 0
+    if (locData.point) {
+      const locEntries = locData.point.map((p: any) => ({
+        user_id: userId,
+        created_at: new Date(parseInt(p.startTimeNanos) / 1000000).toISOString(),
+        latitude: p.value[0].fpVal,
+        longitude: p.value[1].fpVal,
+        accuracy: p.value[2].fpVal
+      }))
+      
+      if (locEntries.length > 0) {
+        const { error: locError } = await supabaseClient
+          .from('location_history')
+          .upsert(locEntries, { onConflict: 'user_id,created_at' })
+        
+        if (!locError) syncedLocations = locEntries.length
+      }
     }
 
     return new Response(JSON.stringify({ 
       success: true, 
-      synced_days: syncedCount, 
-      available_sources: weightSources 
+      synced_days: entries.length,
+      synced_locations: syncedLocations
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
-    return new Response(JSON.stringify({ success: true, synced_days: syncedCount }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 

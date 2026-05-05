@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield, RotateCw } from 'lucide-react';
+import { LogOut, Play, Dumbbell, BarChart2, Camera, ChevronDown, ChevronUp, Trophy, History, Compass, Shield, RotateCw, MapPin } from 'lucide-react';
 import WorkoutExecution from './WorkoutExecution';
 import ProgressionTable from './ProgressionTable';
 import Stats from './Stats';
 import Photos from './Photos';
 import Direction from './Direction';
 import OuraWidget from './OuraWidget';
+import LocationTracker from './LocationTracker';
 import { format, parseISO, startOfWeek } from 'date-fns';
 
 export default function Dashboard({ session }) {
@@ -123,6 +124,7 @@ export default function Dashboard({ session }) {
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative bg-background border-x border-neutral-900 shadow-2xl">
+      <LocationTracker session={session} />
       
       {/* Header */}
       <header className="p-4 border-b border-neutral-800 flex justify-between items-center sticky top-0 bg-background/80 backdrop-blur-md z-20">
