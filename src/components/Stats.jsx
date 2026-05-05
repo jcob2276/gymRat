@@ -13,11 +13,7 @@ export default function Stats({ session }) {
   const [loading, setLoading] = useState(true);
   const [bodyData, setBodyData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
-  const [newMetric, setNewMetric] = useState({ 
-    weight: '', 
-    waist: '', 
-    date: new Date().toISOString().split('T')[0] 
-  });
+  const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
   const [ouraTrend, setOuraTrend] = useState([]);
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
@@ -90,9 +86,10 @@ export default function Stats({ session }) {
 
   async function saveMetrics(e) {
     e.preventDefault();
+    const today = new Date().toISOString().split('T')[0];
     const { error } = await supabase.from('body_metrics').upsert({
       user_id: session.user.id,
-      date: newMetric.date,
+      date: today,
       weight: newMetric.weight ? parseFloat(newMetric.weight) : null,
       waist: newMetric.waist ? parseFloat(newMetric.waist) : null
     });
@@ -417,10 +414,6 @@ export default function Stats({ session }) {
         </header>
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
           <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-1.5 col-span-2">
-              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Data Pomiaru</label>
-              <input type="date" value={newMetric.date} onChange={e => setNewMetric({...newMetric, date: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary invert-[0.9] hue-rotate-180" />
-            </div>
             <div className="space-y-1.5">
               <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Waga (kg)</label>
               <input type="number" step="0.1" value={newMetric.weight} onChange={e => setNewMetric({...newMetric, weight: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />
@@ -552,38 +545,10 @@ export default function Stats({ session }) {
         </div>
       </section>
 
-      <section className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 space-y-8 shadow-2xl shadow-black/50">
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <h3 className="text-xl font-black uppercase italic text-white tracking-tighter italic">Eksportuj Raport</h3>
-            <p className="text-[8px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Wybierz zakres i format danych</p>
-          </div>
-          <FileText className="text-primary/20" size={32} />
-        </div>
-        
+      <section className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
-              <Clock size={12} className="text-primary" /> Od (Data Początkowa)
-            </label>
-            <input 
-              type="date" 
-              value={dateRange.from} 
-              onChange={e => setDateRange({...dateRange, from: e.target.value})} 
-              className="w-full bg-neutral-950 border-2 border-neutral-800 rounded-2xl p-4 text-sm font-black text-white outline-none focus:border-primary transition-all hover:border-neutral-700 invert-[0.9] hue-rotate-180" 
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
-              <Clock size={12} className="text-primary" /> Do (Data Końcowa)
-            </label>
-            <input 
-              type="date" 
-              value={dateRange.to} 
-              onChange={e => setDateRange({...dateRange, to: e.target.value})} 
-              className="w-full bg-neutral-950 border-2 border-neutral-800 rounded-2xl p-4 text-sm font-black text-white outline-none focus:border-primary transition-all hover:border-neutral-700 invert-[0.9] hue-rotate-180" 
-            />
-          </div>
+          <input type="date" value={dateRange.from} onChange={e => setDateRange({...dateRange, from: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none invert-[0.9] hue-rotate-180" />
+          <input type="date" value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-[10px] font-bold text-white outline-none invert-[0.9] hue-rotate-180" />
         </div>
 
         <div className="flex gap-4">
