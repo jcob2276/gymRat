@@ -13,7 +13,11 @@ export default function Stats({ session }) {
   const [loading, setLoading] = useState(true);
   const [bodyData, setBodyData] = useState([]);
   const [recentSessions, setRecentSessions] = useState([]);
-  const [newMetric, setNewMetric] = useState({ weight: '', waist: '' });
+  const [newMetric, setNewMetric] = useState({ 
+    weight: '', 
+    waist: '', 
+    date: new Date().toISOString().split('T')[0] 
+  });
   const [ouraTrend, setOuraTrend] = useState([]);
   const [nutritionData, setNutritionData] = useState([]);
   const [weeklyStats, setWeeklyStats] = useState({ compliance: 0 });
@@ -86,10 +90,9 @@ export default function Stats({ session }) {
 
   async function saveMetrics(e) {
     e.preventDefault();
-    const today = new Date().toISOString().split('T')[0];
     const { error } = await supabase.from('body_metrics').upsert({
       user_id: session.user.id,
-      date: today,
+      date: newMetric.date,
       weight: newMetric.weight ? parseFloat(newMetric.weight) : null,
       waist: newMetric.waist ? parseFloat(newMetric.waist) : null
     });
@@ -414,6 +417,10 @@ export default function Stats({ session }) {
         </header>
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
           <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-1.5 col-span-2">
+              <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Data Pomiaru</label>
+              <input type="date" value={newMetric.date} onChange={e => setNewMetric({...newMetric, date: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary invert-[0.9] hue-rotate-180" />
+            </div>
             <div className="space-y-1.5">
               <label className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Waga (kg)</label>
               <input type="number" step="0.1" value={newMetric.weight} onChange={e => setNewMetric({...newMetric, weight: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-lg font-black text-white outline-none focus:border-primary" />

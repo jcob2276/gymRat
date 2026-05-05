@@ -31,7 +31,7 @@ serve(async (req) => {
       throw new Error('Google Fit nie jest połączony')
     }
 
-    // 2. Get Access Token
+    // 2. Get Access Token (Logic remains the same...)
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -42,67 +42,69 @@ serve(async (req) => {
         grant_type: 'refresh_token',
       }),
     })
-
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    // 3. Fetch Weight Data (last 30 days)
-    const endTimeMillis = Date.now()
-    const startTimeMillis = endTimeMillis - (30 * 24 * 60 * 60 * 1000)
+    // 3. List Data Sources (Debugging)
+    const sourcesResponse = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
+    const sourcesData = await sourcesResponse.json()
+    const weightSources = sourcesData.dataSource?.filter((s: any) => 
+      s.dataType.name.includes('weight') || s.dataType.name.includes('body')
+    ).map((s: any) => s.dataStreamId)
 
-    const fitnessResponse = await fetch(
-      `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          aggregateBy: [
-            { dataSourceId: "derived:com.google.weight:com.google.android.gms:merge_weight" },
-            { dataTypeName: "com.google.body.fat.percentage" },
-            { dataTypeName: "com.google.body.muscle_mass" },
-            { dataTypeName: "com.google.body.bone_mass" },
-            { dataTypeName: "com.google.body.water.percentage" }
-          ],
-          bucketByTime: { durationMillis: 86400000 }, // Daily buckets
-          startTimeMillis,
-          endTimeMillis,
-        })
-      }
-    )
+    const endTimeNanos = BigInt(Date.now()) * BigInt(1000000)
+    const startTimeNanos = endTimeNanos - (BigInt(30 * 24 * 60 * 60) * BigInt(1000000000))
 
-    const data = await fitnessResponse.json()
+    const dataTypes = [
+      { id: "derived:com.google.weight:com.google.android.gms:merge_weight", field: 'weight' },
+      { id: "derived:com.google.body.fat.percentage:com.google.android.gms:merged", field: 'body_fat' },
+      { id: "derived:com.google.body.muscle_mass:com.google.android.gms:merged", field: 'muscle_mass' },
+      { id: "derived:com.google.body.bone_mass:com.google.android.gms:merged", field: 'bone_mass' },
+      { id: "derived:com.google.body.water.percentage:com.google.android.gms:merged", field: 'body_water' }
+    ]
+
     let syncedCount = 0
+    const dayData: Record<string, any> = {}
 
-    // 4. Process and Save to body_metrics
-    if (data.bucket) {
-      for (const bucket of data.bucket) {
-        const date = new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0]
-        const weightValue = bucket.dataset[0]?.point[0]?.value[0]?.fpVal
-        const fatValue = bucket.dataset[1]?.point[0]?.value[0]?.fpVal
-        const muscleValue = bucket.dataset[2]?.point[0]?.value[0]?.fpVal
-        const boneValue = bucket.dataset[3]?.point[0]?.value[0]?.fpVal
-        const waterValue = bucket.dataset[4]?.point[0]?.value[0]?.fpVal
+    for (const dt of dataTypes) {
+      const datasetId = `${startTimeNanos}-${endTimeNanos}`
+      const response = await fetch(
+        `https://www.googleapis.com/fitness/v1/users/me/dataSources/${dt.id}/datasets/${datasetId}`,
+        {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        }
+      )
+      
+      const data = await response.json()
+      if (data.point) {
+        for (const point of data.point) {
+          const date = new Date(parseInt(point.startTimeNanos) / 1000000).toISOString().split('T')[0]
+          const value = point.value[0]?.fpVal || point.value[0]?.intVal
 
-        if (weightValue || fatValue || muscleValue || boneValue || waterValue) {
-          const { error: upsertError } = await supabaseClient
-            .from('body_metrics')
-            .upsert({
-              user_id: userId,
-              date: date,
-              weight: weightValue ? Math.round(weightValue * 10) / 10 : undefined,
-              body_fat: fatValue ? Math.round(fatValue * 10) / 10 : undefined,
-              muscle_mass: muscleValue ? Math.round(muscleValue * 10) / 10 : undefined,
-              bone_mass: boneValue ? Math.round(boneValue * 10) / 10 : undefined,
-              body_water: waterValue ? Math.round(waterValue * 10) / 10 : undefined
-            }, { onConflict: 'user_id,date' })
-
-          if (!upsertError) syncedCount++
+          if (value) {
+            if (!dayData[date]) dayData[date] = { user_id: userId, date }
+            dayData[date][dt.field] = Math.round(value * 10) / 10
+          }
         }
       }
     }
+
+    // 4. Save to DB
+    const entries = Object.values(dayData)
+    for (const entry of entries) {
+      await supabaseClient.from('body_metrics').upsert(entry, { onConflict: 'user_id,date' })
+      syncedCount++
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      synced_days: syncedCount, 
+      available_sources: weightSources 
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
 
     return new Response(JSON.stringify({ success: true, synced_days: syncedCount }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
